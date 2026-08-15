@@ -52,10 +52,10 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 module.exports = async (req, res) => {
   const configured = !!(SUPABASE_URL && SERVICE_KEY);
   if (req.method === 'GET' && (req.query || {}).health === '1') {
-    return res.status(200).json({ ok: true, configured });
+    return res.status(200).json({ ok: true, configured, hasUrl: !!SUPABASE_URL, hasKey: !!SERVICE_KEY });
   }
   if (!configured) {
-    return res.status(503).json({ error: 'not-configured' });
+    return res.status(503).json({ error: 'not-configured', hasUrl: !!SUPABASE_URL, hasKey: !!SERVICE_KEY });
   }
   const membersTable = `${SUPABASE_URL}/rest/v1/schedule_members`;
   const entriesTable = `${SUPABASE_URL}/rest/v1/schedule_entries`;

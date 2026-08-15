@@ -105,9 +105,13 @@
   .mcol .slot:hover { background: #F1F6FA; }
   .mcol .slot.lunch { background: #FAF7F0; }
 
-  .entry { position: absolute; left: 3px; right: 3px; border-radius: 8px; padding: 4px 7px; overflow: hidden; cursor: pointer;
-    font-size: 12px; line-height: 1.35; border: 1px solid transparent; z-index: 2; }
+  .entry { position: absolute; left: 3px; right: 3px; border-radius: 8px; padding: 4px 7px; overflow: hidden; cursor: grab;
+    font-size: 12px; line-height: 1.35; border: 1px solid transparent; z-index: 2;
+    user-select: none; -webkit-user-select: none; touch-action: none; }
   .entry:hover { filter: brightness(.97); box-shadow: 0 2px 8px rgba(30,58,80,.16); }
+  .entry.dragging { opacity: .8; box-shadow: 0 8px 20px rgba(30,58,80,.3); z-index: 6; cursor: grabbing; }
+  .entry .rz { position: absolute; left: 0; right: 0; height: 7px; cursor: ns-resize; }
+  .entry .rz-top { top: 0; } .entry .rz-bot { bottom: 0; }
   .entry b { display: block; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .entry .tm { opacity: .75; font-size: 10.5px; font-variant-numeric: tabular-nums; }
 
@@ -323,7 +327,7 @@
         if (!r.ok) {
           var body = null;
           try { body = await r.json(); } catch (ignored) {}
-          throw { status: r.status, detail: (body && (body.detail || body.error)) || '' };
+          throw { status: r.status, detail: (body && (body.detail || body.error)) || '', body: body };
         }
         var j = await r.json();
         if (date !== state.date) return; // 로딩 중 날짜가 바뀐 경우 무시
@@ -445,9 +449,18 @@
     var err = state.serverErr || {};
     var msg;
     if (err.status === 503) {
-      msg = '서버 저장이 아직 설정되지 않아 <b>이 브라우저에만</b> 저장됩니다. Vercel에 ' +
-        '<code>SUPABASE_URL</code> · <code>SUPABASE_SERVICE_KEY</code> 환경변수를 등록한 뒤 ' +
-        '<b>재배포(Redeploy)</b>해 주세요.';
+      var b = err.body || {};
+      var missing = [];
+      if ('hasUrl' in b) {
+        if (!b.hasUrl) missing.push('<code>SUPABASE_URL</code>');
+        if (!b.hasKey) missing.push('<code>SUPABASE_SERVICE_KEY</code>');
+      }
+      msg = (missing.length
+          ? '환경변수 ' + missing.join(' · ') + ' 이(가) 서버에 등록되어 있지 않습니다. ' +
+            'Vercel 환경 변수에서 이름 철자를 확인해 주세요.'
+          : '서버 저장이 아직 설정되지 않아 <b>이 브라우저에만</b> 저장됩니다. Vercel에 ' +
+            '<code>SUPABASE_URL</code> · <code>SUPABASE_SERVICE_KEY</code> 환경변수를 등록해 주세요.') +
+        ' 등록/수정 후에는 <b>재배포(Redeploy)</b>해야 반영됩니다.';
     } else {
       var d = String(err.detail || '');
       var dl = d.toLowerCase();
@@ -623,9 +636,10 @@
           div.style.left = 'calc(' + (p.lane * 100 / laneCount) + '% + 3px)';
           div.style.right = 'calc(' + ((laneCount - 1 - p.lane) * 100 / laneCount) + '% + 3px)';
         }
-        div.innerHTML = '<b>' + esc(e.title) + '</b><span class="tm">' + fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + '</span>';
-        div.title = e.title + (e.memo ? '\n' + e.memo : '');
-        div.addEventListener('click', function (ev) { ev.stopPropagation(); openEditModal(e); });
+        div.innerHTML = '<div class="rz rz-top"></div><b>' + esc(e.title) + '</b><span class="tm">' +
+          fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + '</span><div class="rz rz-bot"></div>';
+        div.title = e.title + (e.memo ? '\n' + e.memo : '') + '\n(드래그: 이동 · 가장자리: 시간 조절)';
+        div.addEventListener('pointerdown', function (ev) { startEntryDrag(ev, e, div); });
         col.appendChild(div);
       });
 
@@ -652,6 +666,72 @@
   }
 
   function minToY(min) { return (min - DAY_START) / STEP * SLOT_H; }
+
+  // ── 일정 블록 드래그(이동) / 가장자리 리사이즈(시간 조절) ──
+  var dragActive = false;
+  function startEntryDrag(ev, entry, div) {
+    if (ev.button !== undefined && ev.button !== 0) return; // 마우스 왼쪽 버튼만
+    ev.preventDefault();
+    ev.stopPropagation();
+    var mode = ev.target.classList.contains('rz-top') ? 'top' :
+               ev.target.classList.contains('rz-bot') ? 'bot' : 'move';
+    var startY = ev.clientY;
+    var orig = { s: entry.start_min, e: entry.end_min };
+    var cur = { s: orig.s, e: orig.e };
+    var moved = false;
+    dragActive = true;
+    try { div.setPointerCapture(ev.pointerId); } catch (ignored) {}
+
+    function apply(ns, ne) {
+      cur.s = ns; cur.e = ne;
+      div.style.top = (minToY(ns) + 2) + 'px';
+      div.style.height = Math.max(minToY(ne) - minToY(ns) - 4, 22) + 'px';
+      var tm = div.querySelector('.tm');
+      if (tm) tm.textContent = fmtMin(ns) + '~' + fmtMin(ne);
+    }
+    function onMove(e2) {
+      var dy = e2.clientY - startY;
+      if (!moved && Math.abs(dy) < 5) return; // 살짝 움직인 건 클릭으로 취급
+      moved = true;
+      div.classList.add('dragging');
+      var dmin = Math.round(dy / SLOT_H) * STEP;
+      if (mode === 'move') {
+        var dur = orig.e - orig.s;
+        var ns = Math.min(Math.max(orig.s + dmin, DAY_START), DAY_END - dur);
+        apply(ns, ns + dur);
+      } else if (mode === 'top') {
+        apply(Math.min(Math.max(orig.s + dmin, DAY_START), orig.e - STEP), orig.e);
+      } else {
+        apply(orig.s, Math.max(Math.min(orig.e + dmin, DAY_END), orig.s + STEP));
+      }
+    }
+    function cleanup() {
+      dragActive = false;
+      div.classList.remove('dragging');
+      div.removeEventListener('pointermove', onMove);
+      div.removeEventListener('pointerup', onUp);
+      div.removeEventListener('pointercancel', onCancel);
+    }
+    async function onUp() {
+      cleanup();
+      if (!moved) { openEditModal(entry); return; } // 움직이지 않았으면 클릭 → 수정 창
+      if (cur.s === orig.s && cur.e === orig.e) return;
+      entry.start_min = cur.s; entry.end_min = cur.e; // 화면 먼저 반영
+      renderBoard();
+      try {
+        await saveEntryRow({ id: entry.id, date: state.date, member_id: entry.member_id,
+          start_min: cur.s, end_min: cur.e, title: entry.title, memo: entry.memo || '' });
+      } catch (ex) {
+        entry.start_min = orig.s; entry.end_min = orig.e;
+        renderBoard();
+        alert('시간 변경을 저장하지 못했습니다. 다시 시도해 주세요.');
+      }
+    }
+    function onCancel() { apply(orig.s, orig.e); cleanup(); }
+    div.addEventListener('pointermove', onMove);
+    div.addEventListener('pointerup', onUp);
+    div.addEventListener('pointercancel', onCancel);
+  }
 
   // ── 회의 시간 찾기 ──
   function renderMeetPanel() {
@@ -916,7 +996,7 @@
 
   // 30초마다, 그리고 탭에 다시 돌아왔을 때 자동 새로고침 (팀원이 올린 일정 반영)
   setInterval(function () {
-    if (state.mode === 'server' && !el('entryModalBg').classList.contains('open')) loadDay(true);
+    if (state.mode === 'server' && !dragActive && !el('entryModalBg').classList.contains('open')) loadDay(true);
   }, 30000);
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden) loadDay(true);
