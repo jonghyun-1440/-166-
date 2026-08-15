@@ -109,6 +109,28 @@ module.exports = async (req, res) => {
         return res.status(200).json({ ok: true });
       }
 
+      // 구성원 추가
+      if (b.type === 'member-add') {
+        const m = b.member || {};
+        const row = {
+          id: String(m.id || '').slice(0, 40),
+          name: String(m.name || '').trim().slice(0, 20),
+          color: /^#[0-9A-Fa-f]{6}$/.test(String(m.color || '')) ? m.color : DEFAULT_MEMBER_COLORS[0],
+          sort: Number.isFinite(Number(m.sort)) ? Number(m.sort) : 999
+        };
+        if (!row.id || !row.name) return res.status(400).json({ error: 'bad-member' });
+        const cnt = await fetch(`${membersTable}?select=id&limit=31`, { headers: sbHeaders() });
+        if (!cnt.ok) throw new Error(`count ${cnt.status}: ${await cnt.text()}`);
+        if ((await cnt.json()).length >= 30) return res.status(400).json({ error: 'too-many-members' });
+        const resp = await fetch(membersTable, {
+          method: 'POST',
+          headers: { ...sbHeaders(), Prefer: 'resolution=merge-duplicates' },
+          body: JSON.stringify(row)
+        });
+        if (!resp.ok) throw new Error(`member-add ${resp.status}: ${await resp.text()}`);
+        return res.status(200).json({ ok: true });
+      }
+
       // 일정 저장(생성/수정) — 같은 id면 갱신(upsert)
       if (b.type === 'entry') {
         const e = b.entry || {};
@@ -139,8 +161,20 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'bad-type' });
     }
 
-    // 일정 삭제
+    // 삭제 — ?member=구성원(본인 일정 포함), ?id=일정 하나
     if (req.method === 'DELETE') {
+      const memberId = String((req.query || {}).member || '');
+      if (memberId) {
+        let resp = await fetch(`${entriesTable}?member_id=eq.${encodeURIComponent(memberId)}`, {
+          method: 'DELETE', headers: sbHeaders()
+        });
+        if (!resp.ok) throw new Error(`member-entries ${resp.status}: ${await resp.text()}`);
+        resp = await fetch(`${membersTable}?id=eq.${encodeURIComponent(memberId)}`, {
+          method: 'DELETE', headers: sbHeaders()
+        });
+        if (!resp.ok) throw new Error(`member-del ${resp.status}: ${await resp.text()}`);
+        return res.status(200).json({ ok: true });
+      }
       const id = String((req.query || {}).id || '');
       if (!id) return res.status(400).json({ error: 'no-id' });
       const resp = await fetch(`${entriesTable}?id=eq.${encodeURIComponent(id)}`, {

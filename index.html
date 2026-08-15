@@ -58,6 +58,9 @@
   .notice { max-width: 1360px; margin: 12px auto 0; padding: 0 16px; }
   .notice .inner { background: #FBF4E3; border: 1px solid #E8D8B0; color: #7A5F2C; border-radius: 11px;
     padding: 10px 14px; font-size: 13px; }
+  .notice .inner button { margin-left: 8px; border: 1px solid #D8C48E; background: #fff; color: #7A5F2C;
+    border-radius: 7px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
+  .notice .inner button:hover { background: #F5EDD8; }
 
   /* ── 회의 시간 찾기 패널 ── */
   .meet-panel { max-width: 1360px; margin: 12px auto 0; padding: 0 16px; display: none; }
@@ -90,6 +93,8 @@
   .hcell .pen { opacity: .45; font-size: 11px; margin-left: 5px; }
   .hcell:hover .pen { opacity: .9; }
   .hcell.corner { left: 0; z-index: 6; cursor: default; border-left: 0; background: var(--navy-3); font-size: 12.5px; }
+  .hcell.addcol { background: var(--navy-3); color: var(--gold); font-size: 17px; font-weight: 400; }
+  .hcell.addcol:hover { color: #fff; }
   .timecol { position: sticky; left: 0; z-index: 3; background: #FBFCFD; border-right: 1px solid var(--line); }
   .timecol .t { height: var(--slot-h); font-size: 11.5px; color: var(--muted); text-align: right; padding: 2px 8px 0 0;
     border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
@@ -165,17 +170,14 @@
       <button class="nav-btn" id="nextDay" title="다음 날">▶</button>
       <button class="today-btn" id="todayBtn">오늘</button>
     </div>
+    <button class="meet-btn" id="allAddBtn" style="background:var(--brass)" title="모든 팀원에게 같은 일정을 한 번에 등록">📌 전체 일정 추가</button>
     <button class="meet-btn" id="meetToggle">🕐 회의 시간 찾기</button>
     <div class="status" id="status"><span class="dot"></span>연결 확인 중…</div>
   </div>
 </header>
 
 <div class="notice" id="localNotice" style="display:none">
-  <div class="inner">
-    ⚠️ 서버가 아직 연결되지 않아 <b>이 브라우저에만</b> 저장됩니다. 팀원과 공유하려면 Vercel에
-    <code>SUPABASE_URL</code> · <code>SUPABASE_SERVICE_KEY</code> 환경변수를 설정하고
-    <code>api/schedule.js</code> 상단의 SQL로 테이블을 만들어 주세요.
-  </div>
+  <div class="inner" id="localNoticeText"></div>
 </div>
 
 <div class="meet-panel" id="meetPanel">
@@ -235,14 +237,15 @@
   </div>
 </div>
 
-<!-- 이름 변경 모달 -->
+<!-- 팀원 이름 변경/추가 모달 -->
 <div class="modal-bg" id="nameModalBg">
   <div class="modal">
-    <h3>이름 변경</h3>
+    <h3 id="nTitle">이름 변경</h3>
     <div class="f-row">
-      <input type="text" id="nName" maxlength="20" />
+      <input type="text" id="nName" maxlength="20" placeholder="이름" />
     </div>
     <div class="btns">
+      <button class="btn danger" id="nDelete" style="display:none">팀원 제거</button>
       <button class="btn" id="nCancel">취소</button>
       <button class="btn primary" id="nSave">저장</button>
     </div>
@@ -317,21 +320,28 @@
     if (state.mode !== 'local') {
       try {
         var r = await fetch(API + '?date=' + date);
-        if (r.status === 503) throw { notConfigured: true };
-        if (!r.ok) throw new Error('load ' + r.status);
+        if (!r.ok) {
+          var body = null;
+          try { body = await r.json(); } catch (ignored) {}
+          throw { status: r.status, detail: (body && (body.detail || body.error)) || '' };
+        }
         var j = await r.json();
         if (date !== state.date) return; // 로딩 중 날짜가 바뀐 경우 무시
         state.mode = 'server';
+        state.serverErr = null;
         state.members = j.members || [];
         state.entries = j.entries || [];
         setStatus();
         render();
+        maybeMigrateLocal();
         return;
       } catch (e) {
-        if (state.mode === 'server' && !(e && e.notConfigured)) {
+        if (state.mode === 'server' && !(e && e.status === 503)) {
           if (!silent) setStatus('서버 응답 없음 — 잠시 후 다시 시도합니다');
           return; // 일시 오류: 기존 화면 유지
         }
+        state.serverErr = (e && typeof e.status === 'number')
+          ? e : { status: 0, detail: '네트워크 오류' };
         state.mode = 'local'; // 미설정/최초 실패 → 로컬 모드
       }
     }
@@ -379,6 +389,39 @@
       localSave(db);
     }
   }
+  var PALETTE = ['#3E6288', '#A9884F', '#5E8D66', '#B56576', '#6D597A', '#C97B4A', '#40878A', '#7D6FA0', '#8B6D5C'];
+  async function postMemberRow(row) {
+    var r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'member-add', member: row }) });
+    if (!r.ok) throw new Error('member-add');
+  }
+  async function addMemberRow(name) {
+    var used = state.members.map(function (m) { return m.color; });
+    var color = PALETTE.filter(function (c) { return used.indexOf(c) === -1; })[0] ||
+      PALETTE[state.members.length % PALETTE.length];
+    var sort = state.members.reduce(function (mx, m) { return Math.max(mx, m.sort || 0); }, 0) + 1;
+    var row = { id: 'm' + uid(), name: name, color: color, sort: sort };
+    if (state.mode === 'server') {
+      await postMemberRow(row);
+    } else {
+      var db = localLoad();
+      (db.members = db.members || []).push(row);
+      localSave(db);
+    }
+  }
+  async function removeMemberRow(id) {
+    if (state.mode === 'server') {
+      var r = await fetch(API + '?member=' + encodeURIComponent(id), { method: 'DELETE' });
+      if (!r.ok) throw new Error('member-del');
+    } else {
+      var db = localLoad();
+      db.members = (db.members || []).filter(function (m) { return m.id !== id; });
+      Object.keys(db.entries || {}).forEach(function (d) {
+        db.entries[d] = db.entries[d].filter(function (e) { return e.member_id !== id; });
+      });
+      localSave(db);
+    }
+  }
 
   function setStatus(text) {
     var s = el('status');
@@ -386,6 +429,7 @@
     if (state.mode === 'local') {
       s.className = 'status local';
       s.innerHTML = '<span class="dot"></span>오프라인 모드 (이 브라우저에만 저장)';
+      renderLocalNotice();
       el('localNotice').style.display = '';
     } else {
       s.className = 'status';
@@ -394,6 +438,71 @@
         String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ' 업데이트';
       el('localNotice').style.display = 'none';
     }
+  }
+
+  // 연결 실패 원인을 배너에 구체적으로 안내
+  function renderLocalNotice() {
+    var err = state.serverErr || {};
+    var msg;
+    if (err.status === 503) {
+      msg = '서버 저장이 아직 설정되지 않아 <b>이 브라우저에만</b> 저장됩니다. Vercel에 ' +
+        '<code>SUPABASE_URL</code> · <code>SUPABASE_SERVICE_KEY</code> 환경변수를 등록한 뒤 ' +
+        '<b>재배포(Redeploy)</b>해 주세요.';
+    } else {
+      var d = String(err.detail || '');
+      var dl = d.toLowerCase();
+      var hint = '';
+      if (/does not exist|schema cache|find the table/.test(dl)) {
+        hint = ' → Supabase <b>SQL Editor</b>에서 테이블 생성 SQL을 아직 실행하지 않은 것 같습니다.';
+      } else if (/invalid api key|jwt|unauthorized|401|403/.test(dl)) {
+        hint = ' → Vercel의 <code>SUPABASE_SERVICE_KEY</code> 값(Secret key)이 올바른지 확인해 주세요.';
+      } else if (/fetch failed|enotfound|getaddrinfo|econn|abort/.test(dl)) {
+        hint = ' → Vercel의 <code>SUPABASE_URL</code> 값이 올바른지 확인해 주세요.';
+      }
+      msg = '⚠️ 서버 연결에 실패해 <b>이 브라우저에만</b> 저장 중입니다. ' +
+        '<b>오류:</b> ' + esc(d || ('HTTP ' + err.status)) + hint;
+    }
+    el('localNoticeText').innerHTML = msg + ' <button id="retryConn">다시 연결 시도</button>';
+    el('retryConn').addEventListener('click', function () {
+      state.mode = null; state.serverErr = null;
+      setStatus('서버에 다시 연결하는 중…');
+      loadDay();
+    });
+  }
+
+  // 서버 연결 성공 시, 오프라인 모드에서 저장해 둔 이름/일정을 서버로 옮길지 한 번 묻는다
+  var migrationChecked = false;
+  async function maybeMigrateLocal() {
+    if (migrationChecked) return;
+    migrationChecked = true;
+    var db = localLoad();
+    if (!db.members || db.migrated) return;
+    var renamed = db.members.filter(function (m) { return !/^팀원 \d+$/.test(m.name); });
+    var entryCount = Object.keys(db.entries || {}).reduce(function (n, d) {
+      return n + db.entries[d].length;
+    }, 0);
+    if (!renamed.length && !entryCount) return;
+    var serverFresh = state.members.every(function (m) { return /^팀원 \d+$/.test(m.name); }) &&
+      !state.entries.length;
+    if (!serverFresh) { db.migrated = true; localSave(db); return; }
+    if (confirm('서버가 연결되었습니다!\n오프라인 모드에서 이 브라우저에 저장해 둔 팀원 이름과 일정 ' +
+        entryCount + '건을 팀 서버로 올릴까요?')) {
+      try {
+        for (var i = 0; i < db.members.length; i++) {
+          var m = db.members[i];
+          var sv = state.members.find(function (x) { return x.id === m.id; });
+          if (sv && sv.name !== m.name) await saveMemberName(m.id, m.name);
+          if (!sv) await postMemberRow(m);
+        }
+        var dates = Object.keys(db.entries || {});
+        for (var d2 = 0; d2 < dates.length; d2++) {
+          var list = db.entries[dates[d2]];
+          for (var k = 0; k < list.length; k++) await saveEntryRow(list[k]);
+        }
+      } catch (ex) { alert('일부 데이터를 옮기지 못했습니다. 화면에서 직접 확인해 주세요.'); }
+    }
+    db.migrated = true; localSave(db);
+    await loadDay(true);
   }
 
   // ── 렌더링 ──
@@ -413,7 +522,7 @@
     var members = state.members;
     var grid = document.createElement('div');
     grid.className = 'grid';
-    grid.style.gridTemplateColumns = '58px repeat(' + members.length + ', minmax(112px, 1fr))';
+    grid.style.gridTemplateColumns = '58px repeat(' + members.length + ', minmax(112px, 1fr)) 44px';
 
     // 헤더
     var corner = document.createElement('div');
@@ -428,6 +537,12 @@
       h.addEventListener('click', function () { openNameModal(m); });
       grid.appendChild(h);
     });
+    var addH = document.createElement('div');
+    addH.className = 'hcell addcol';
+    addH.title = '팀원 추가';
+    addH.textContent = '＋';
+    addH.addEventListener('click', openMemberAddModal);
+    grid.appendChild(addH);
 
     // 시간 열
     var tc = document.createElement('div');
@@ -619,6 +734,19 @@
   function renderMemberChecks(checkedIds, disabled) {
     var box = el('fMembers');
     box.innerHTML = '';
+    if (!disabled) {
+      var all = document.createElement('button');
+      all.type = 'button';
+      all.className = 'chip';
+      all.style.fontWeight = '700';
+      all.textContent = '전체 선택/해제';
+      all.addEventListener('click', function () {
+        var cbs = box.querySelectorAll('input[type=checkbox]');
+        var anyOff = Array.prototype.some.call(cbs, function (c) { return !c.checked; });
+        Array.prototype.forEach.call(cbs, function (c) { c.checked = anyOff; });
+      });
+      box.appendChild(all);
+    }
     state.members.forEach(function (m) {
       var lb = document.createElement('label');
       lb.className = 'chip';
@@ -634,6 +762,15 @@
     el('fTitle').value = ''; el('fMemo').value = '';
     fillTimeSelects(el('fStart'), el('fEnd'), startMin, Math.min(startMin + 60, DAY_END));
     renderMemberChecks([memberId], false);
+    el('fDelete').style.display = 'none';
+    showEntryModal();
+  }
+  function openAllModal() {
+    editingId = null;
+    el('entryModalTitle').textContent = '전체 일정 추가';
+    el('fTitle').value = ''; el('fMemo').value = '';
+    fillTimeSelects(el('fStart'), el('fEnd'), 9 * 60, 10 * 60);
+    renderMemberChecks(state.members.map(function (m) { return m.id; }), false);
     el('fDelete').style.display = 'none';
     showEntryModal();
   }
@@ -698,9 +835,19 @@
 
   function openNameModal(m) {
     renamingId = m.id;
+    el('nTitle').textContent = '이름 변경';
     el('nName').value = m.name;
+    el('nDelete').style.display = state.members.length > 1 ? '' : 'none';
     el('nameModalBg').classList.add('open');
     setTimeout(function () { el('nName').focus(); el('nName').select(); }, 50);
+  }
+  function openMemberAddModal() {
+    renamingId = null; // null = 추가 모드
+    el('nTitle').textContent = '팀원 추가';
+    el('nName').value = '';
+    el('nDelete').style.display = 'none';
+    el('nameModalBg').classList.add('open');
+    setTimeout(function () { el('nName').focus(); }, 50);
   }
 
   // ── 이벤트 바인딩 ──
@@ -710,6 +857,7 @@
   el('datePick').addEventListener('change', function (ev) {
     if (ev.target.value) { state.date = ev.target.value; loadDay(); }
   });
+  el('allAddBtn').addEventListener('click', openAllModal);
   el('meetToggle').addEventListener('click', function () {
     state.meetOpen = !state.meetOpen;
     renderMeetPanel(); renderBoard();
@@ -733,12 +881,25 @@
   el('nameModalBg').addEventListener('click', function (ev) { if (ev.target === ev.currentTarget) ev.currentTarget.classList.remove('open'); });
   el('nSave').addEventListener('click', async function () {
     var name = el('nName').value.trim();
-    if (!name || !renamingId) return;
+    if (!name) return;
     try {
-      await saveMemberName(renamingId, name);
+      if (renamingId) await saveMemberName(renamingId, name);
+      else await addMemberRow(name);
       el('nameModalBg').classList.remove('open');
       await loadDay(true);
     } catch (ex) { alert('저장에 실패했습니다. 다시 시도해 주세요.'); }
+  });
+  el('nDelete').addEventListener('click', async function () {
+    if (!renamingId) return;
+    var m = state.members.find(function (x) { return x.id === renamingId; });
+    if (!m) return;
+    if (!confirm(m.name + ' 님을 팀에서 제거할까요?\n등록된 일정도 모두 함께 삭제됩니다.')) return;
+    try {
+      await removeMemberRow(renamingId);
+      delete state.meetSel[renamingId];
+      el('nameModalBg').classList.remove('open');
+      await loadDay(true);
+    } catch (ex) { alert('제거에 실패했습니다. 다시 시도해 주세요.'); }
   });
   el('nName').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') el('nSave').click(); });
   document.addEventListener('keydown', function (ev) {
