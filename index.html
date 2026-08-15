@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>팀 일정 공유 — 하루 타임테이블</title>
+<meta name="description" content="9명이 함께 쓰는 하루 일정 타임테이블. 각자의 일정을 등록해 서로 공유하고, 모두가 비는 시간에 회의를 잡습니다." />
+<meta name="robots" content="noindex" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --navy-1: #3E6288; --navy-2: #2A4A6B; --navy-3: #1F3A55;
+    --deep: #1E3A50; --paper: #FFFFFF;
+    --soft: #EEF3F7; --line: #DCE4EC; --muted: #4E6076; --faint: #8CA0B3;
+    --gold: #C7B48E; --brass: #A9884F;
+    --free: #3E7A55;
+    --sans: 'Noto Sans KR', sans-serif;
+    --slot-h: 36px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--sans); color: var(--deep); background: #F6F8FA; line-height: 1.6; word-break: keep-all; }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; font-size: 14px; color: var(--deep); }
+
+  .top-accent { position: fixed; top: 0; left: 0; right: 0; height: 6px; z-index: 60;
+    background: linear-gradient(90deg, var(--brass), var(--gold) 45%, var(--brass)); }
+
+  /* ── 상단 바 ── */
+  .bar { position: sticky; top: 0; z-index: 50; background: rgba(255,255,255,.95); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line); padding-top: 6px; }
+  .bar-in { max-width: 1360px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 900; font-size: 15px; letter-spacing: .04em; }
+  .brand img { height: 26px; width: auto; }
+  .brand .sub { font-weight: 500; color: var(--brass); font-size: 13px; }
+
+  .date-nav { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .date-nav .nav-btn { width: 34px; height: 34px; border: 1px solid var(--line); background: #fff; border-radius: 9px;
+    font-size: 15px; color: var(--navy-2); }
+  .date-nav .nav-btn:hover { background: var(--soft); }
+  .date-label { position: relative; border: 1px solid var(--line); background: #fff; border-radius: 9px;
+    padding: 6px 13px; font-size: 14.5px; font-weight: 700; color: var(--deep); display: flex; align-items: center; gap: 7px; }
+  .date-label:hover { background: var(--soft); }
+  .date-label .dow { color: var(--brass); }
+  .date-label input[type=date] { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+  .today-btn { border: 1px solid var(--line); background: #fff; border-radius: 9px; padding: 6px 12px; font-size: 13px;
+    font-weight: 700; color: var(--navy-2); }
+  .today-btn:hover { background: var(--soft); }
+  .meet-btn { border: 0; background: var(--navy-2); color: #fff; border-radius: 9px; padding: 8px 15px; font-size: 13.5px; font-weight: 700; }
+  .meet-btn:hover { background: var(--navy-3); }
+  .meet-btn.on { background: var(--brass); }
+
+  .status { font-size: 12px; color: var(--faint); width: 100%; text-align: right; margin-top: -4px; }
+  .status .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #56A06E; margin-right: 4px; vertical-align: 1px; }
+  .status.local .dot { background: #D0A24A; }
+
+  .notice { max-width: 1360px; margin: 12px auto 0; padding: 0 16px; }
+  .notice .inner { background: #FBF4E3; border: 1px solid #E8D8B0; color: #7A5F2C; border-radius: 11px;
+    padding: 10px 14px; font-size: 13px; }
+
+  /* ── 회의 시간 찾기 패널 ── */
+  .meet-panel { max-width: 1360px; margin: 12px auto 0; padding: 0 16px; display: none; }
+  .meet-panel.open { display: block; }
+  .meet-inner { background: #fff; border: 1px solid var(--line); border-radius: 13px; padding: 15px 16px; }
+  .meet-inner h3 { font-size: 14.5px; margin-bottom: 9px; }
+  .meet-inner h3 span { color: var(--brass); font-weight: 500; font-size: 12.5px; margin-left: 8px; }
+  .meet-row { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 9px; }
+  .meet-row label.opt { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 99px;
+    padding: 4px 11px 4px 8px; font-size: 12.5px; cursor: pointer; user-select: none; background: #fff; }
+  .chip input { accent-color: var(--navy-2); }
+  .chip .sw { width: 9px; height: 9px; border-radius: 3px; }
+  .meet-row select { border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; background: #fff; }
+  .free-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .free-item { border: 1px solid #BCD9C6; background: #EFF7F1; color: var(--free); border-radius: 9px;
+    padding: 6px 12px; font-size: 13px; font-weight: 700; }
+  .free-item:hover { background: #DFEFE4; }
+  .free-none { font-size: 13px; color: var(--faint); }
+
+  /* ── 타임테이블 ── */
+  .board-wrap { max-width: 1360px; margin: 14px auto 60px; padding: 0 16px; }
+  .board { overflow: auto; background: #fff; border: 1px solid var(--line); border-radius: 14px;
+    max-height: calc(100vh - 150px); }
+  .grid { display: grid; min-width: 1150px; }
+  .hcell { position: sticky; top: 0; z-index: 4; background: var(--navy-2); color: #fff; font-size: 13.5px; font-weight: 700;
+    padding: 10px 6px; text-align: center; border-left: 1px solid rgba(255,255,255,.14); cursor: pointer; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; }
+  .hcell .csw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+  .hcell .pen { opacity: .45; font-size: 11px; margin-left: 5px; }
+  .hcell:hover .pen { opacity: .9; }
+  .hcell.corner { left: 0; z-index: 6; cursor: default; border-left: 0; background: var(--navy-3); font-size: 12.5px; }
+  .timecol { position: sticky; left: 0; z-index: 3; background: #FBFCFD; border-right: 1px solid var(--line); }
+  .timecol .t { height: var(--slot-h); font-size: 11.5px; color: var(--muted); text-align: right; padding: 2px 8px 0 0;
+    border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  .timecol .t.half { color: #B4C2CF; border-top-color: #EDF1F5; font-size: 10.5px; }
+  .mcol { position: relative; border-left: 1px solid var(--line); }
+  .mcol .slot { height: var(--slot-h); border-top: 1px solid #EDF1F5; cursor: pointer; }
+  .mcol .slot.hour { border-top-color: var(--line); }
+  .mcol .slot:hover { background: #F1F6FA; }
+  .mcol .slot.lunch { background: #FAF7F0; }
+
+  .entry { position: absolute; left: 3px; right: 3px; border-radius: 8px; padding: 4px 7px; overflow: hidden; cursor: pointer;
+    font-size: 12px; line-height: 1.35; border: 1px solid transparent; z-index: 2; }
+  .entry:hover { filter: brightness(.97); box-shadow: 0 2px 8px rgba(30,58,80,.16); }
+  .entry b { display: block; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .entry .tm { opacity: .75; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+
+  .lunch-band { position: absolute; left: 0; right: 0; pointer-events: none; z-index: 1; display: flex;
+    align-items: center; justify-content: center; }
+  .lunch-band span { font-size: 12px; letter-spacing: .5em; color: #C9B78C; font-weight: 700; padding-left: .5em; }
+  .free-band { position: absolute; left: 0; right: 0; z-index: 1; background: rgba(86,160,110,.14);
+    border-top: 2px dashed #7DB893; border-bottom: 2px dashed #7DB893; cursor: pointer; }
+  .free-band:hover { background: rgba(86,160,110,.22); }
+  .now-line { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid #D26060; z-index: 3; pointer-events: none; }
+  .now-line::before { content: ''; position: absolute; left: 0; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: #D26060; }
+
+  /* ── 모달 ── */
+  .modal-bg { position: fixed; inset: 0; background: rgba(20,34,48,.45); z-index: 90; display: none;
+    align-items: center; justify-content: center; padding: 16px; }
+  .modal-bg.open { display: flex; }
+  .modal { background: #fff; border-radius: 15px; width: 100%; max-width: 430px; padding: 22px;
+    box-shadow: 0 18px 50px rgba(15,30,45,.3); max-height: 90vh; overflow: auto; }
+  .modal h3 { font-size: 16.5px; margin-bottom: 15px; }
+  .f-row { margin-bottom: 12px; }
+  .f-row label.t { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 5px; }
+  .f-row input[type=text], .f-row textarea { width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; }
+  .f-row textarea { resize: vertical; min-height: 58px; }
+  .f-row input:focus, .f-row textarea:focus, .f-row select:focus { outline: 2px solid rgba(62,98,136,.35); border-color: var(--navy-1); }
+  .time-pair { display: flex; align-items: center; gap: 8px; }
+  .time-pair select { flex: 1; border: 1px solid var(--line); border-radius: 9px; padding: 8px; background: #fff; }
+  .mem-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .modal .btns { display: flex; gap: 8px; margin-top: 18px; }
+  .btn { border-radius: 10px; padding: 10px 16px; font-size: 14px; font-weight: 700; border: 1px solid var(--line); background: #fff; color: var(--muted); }
+  .btn:hover { background: var(--soft); }
+  .btn.primary { background: var(--navy-2); border-color: var(--navy-2); color: #fff; flex: 1; }
+  .btn.primary:hover { background: var(--navy-3); }
+  .btn.danger { color: #B14A4A; border-color: #E4C6C6; }
+  .btn.danger:hover { background: #FBF1F1; }
+  .err { color: #B14A4A; font-size: 12.5px; margin-top: 8px; display: none; }
+  .err.show { display: block; }
+
+  @media (max-width: 640px) {
+    .bar-in { padding: 8px 10px; gap: 8px; }
+    .brand .name { display: none; }
+    .board-wrap, .notice, .meet-panel { padding: 0 8px; }
+    .date-nav { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="top-accent"></div>
+
+<header class="bar">
+  <div class="bar-in">
+    <div class="brand">
+      <span class="name">팀 일정 공유</span><span class="sub">Daily Timetable</span>
+    </div>
+    <div class="date-nav">
+      <button class="nav-btn" id="prevDay" title="이전 날">◀</button>
+      <div class="date-label" id="dateLabel">
+        <span id="dateText">…</span>
+        <input type="date" id="datePick" />
+      </div>
+      <button class="nav-btn" id="nextDay" title="다음 날">▶</button>
+      <button class="today-btn" id="todayBtn">오늘</button>
+    </div>
+    <button class="meet-btn" id="meetToggle">🕐 회의 시간 찾기</button>
+    <div class="status" id="status"><span class="dot"></span>연결 확인 중…</div>
+  </div>
+</header>
+
+<div class="notice" id="localNotice" style="display:none">
+  <div class="inner">
+    ⚠️ 서버가 아직 연결되지 않아 <b>이 브라우저에만</b> 저장됩니다. 팀원과 공유하려면 Vercel에
+    <code>SUPABASE_URL</code> · <code>SUPABASE_SERVICE_KEY</code> 환경변수를 설정하고
+    <code>api/schedule.js</code> 상단의 SQL로 테이블을 만들어 주세요.
+  </div>
+</div>
+
+<div class="meet-panel" id="meetPanel">
+  <div class="meet-inner">
+    <h3>모두가 비는 시간 찾기 <span>참석자를 고르면 겹치는 빈 시간을 표에 초록색으로 표시합니다</span></h3>
+    <div class="meet-row" id="meetMembers"></div>
+    <div class="meet-row">
+      <label class="opt">시간대
+        <select id="meetFrom"></select> ~ <select id="meetTo"></select>
+      </label>
+      <label class="opt">최소
+        <select id="meetDur">
+          <option value="30">30분</option>
+          <option value="60" selected>1시간</option>
+          <option value="90">1시간 30분</option>
+          <option value="120">2시간</option>
+        </select>
+      </label>
+      <label class="opt"><input type="checkbox" id="meetSkipLunch" checked /> 점심시간(12~13시) 제외</label>
+    </div>
+    <div class="free-list" id="freeList"></div>
+  </div>
+</div>
+
+<div class="board-wrap">
+  <div class="board" id="board"></div>
+</div>
+
+<!-- 일정 추가/수정 모달 -->
+<div class="modal-bg" id="entryModalBg">
+  <div class="modal">
+    <h3 id="entryModalTitle">일정 추가</h3>
+    <div class="f-row">
+      <label class="t">제목</label>
+      <input type="text" id="fTitle" maxlength="60" placeholder="예: ○○○ 미팅, 외근, 교육 …" />
+    </div>
+    <div class="f-row">
+      <label class="t">시간</label>
+      <div class="time-pair">
+        <select id="fStart"></select><span>~</span><select id="fEnd"></select>
+      </div>
+    </div>
+    <div class="f-row" id="fMemRow">
+      <label class="t">대상 (여러 명을 고르면 각자의 칸에 같은 일정이 들어갑니다)</label>
+      <div class="mem-list" id="fMembers"></div>
+    </div>
+    <div class="f-row">
+      <label class="t">메모 (선택)</label>
+      <textarea id="fMemo" maxlength="500" placeholder="장소, 준비물 등"></textarea>
+    </div>
+    <div class="err" id="fErr"></div>
+    <div class="btns">
+      <button class="btn danger" id="fDelete" style="display:none">삭제</button>
+      <button class="btn" id="fCancel">취소</button>
+      <button class="btn primary" id="fSave">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 이름 변경 모달 -->
+<div class="modal-bg" id="nameModalBg">
+  <div class="modal">
+    <h3>이름 변경</h3>
+    <div class="f-row">
+      <input type="text" id="nName" maxlength="20" />
+    </div>
+    <div class="btns">
+      <button class="btn" id="nCancel">취소</button>
+      <button class="btn primary" id="nSave">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── 시간 상수: 06:00 ~ 22:00, 30분 단위 ──
+  var DAY_START = 6 * 60, DAY_END = 22 * 60, STEP = 30, SLOT_H = 36;
+  var SLOTS = (DAY_END - DAY_START) / STEP;
+  var LUNCH_S = 12 * 60, LUNCH_E = 13 * 60;
+  var API = '/api/schedule';
+  var LS_KEY = 'mlk-team-schedule-v1';
+
+  var state = {
+    date: todayStr(),
+    members: [],
+    entries: [],
+    mode: null,            // 'server' | 'local'
+    meetOpen: false,
+    meetSel: {},           // member_id -> bool
+    freeWindows: []
+  };
+  var editingId = null;    // 수정 중인 일정 id
+  var renamingId = null;
+
+  // ── 유틸 ──
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function fmtMin(m) {
+    return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+  }
+  function dowKo(dateStr) {
+    return ['일', '월', '화', '수', '목', '금', '토'][new Date(dateStr + 'T00:00:00').getDay()];
+  }
+  function shiftDate(dateStr, days) {
+    var d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+  function hexToRgba(hex, a) {
+    var h = (hex || '#3E6288').replace('#', '');
+    var r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+  }
+  function el(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  // ── 로컬 저장소 (서버 미연결 시 대체) ──
+  function localLoad() {
+    try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch (e) { return {}; }
+  }
+  function localSave(db) { localStorage.setItem(LS_KEY, JSON.stringify(db)); }
+  function localDefaults() {
+    var colors = ['#3E6288', '#A9884F', '#5E8D66', '#B56576', '#6D597A', '#C97B4A', '#40878A', '#7D6FA0', '#8B6D5C'];
+    return colors.map(function (c, i) { return { id: 'm' + (i + 1), name: '팀원 ' + (i + 1), color: c, sort: i + 1 }; });
+  }
+
+  // ── 데이터 액세스 (서버 ↔ 로컬 자동 전환) ──
+  async function loadDay(silent) {
+    var date = state.date;
+    if (state.mode !== 'local') {
+      try {
+        var r = await fetch(API + '?date=' + date);
+        if (r.status === 503) throw { notConfigured: true };
+        if (!r.ok) throw new Error('load ' + r.status);
+        var j = await r.json();
+        if (date !== state.date) return; // 로딩 중 날짜가 바뀐 경우 무시
+        state.mode = 'server';
+        state.members = j.members || [];
+        state.entries = j.entries || [];
+        setStatus();
+        render();
+        return;
+      } catch (e) {
+        if (state.mode === 'server' && !(e && e.notConfigured)) {
+          if (!silent) setStatus('서버 응답 없음 — 잠시 후 다시 시도합니다');
+          return; // 일시 오류: 기존 화면 유지
+        }
+        state.mode = 'local'; // 미설정/최초 실패 → 로컬 모드
+      }
+    }
+    var db = localLoad();
+    if (!db.members || !db.members.length) { db.members = localDefaults(); db.entries = {}; localSave(db); }
+    state.members = db.members;
+    state.entries = (db.entries && db.entries[date]) || [];
+    setStatus();
+    render();
+  }
+
+  async function saveEntryRow(row) {
+    if (state.mode === 'server') {
+      var r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'entry', entry: row }) });
+      if (!r.ok) throw new Error('save');
+    } else {
+      var db = localLoad();
+      db.entries = db.entries || {};
+      var list = (db.entries[row.date] = db.entries[row.date] || []);
+      var i = list.findIndex(function (x) { return x.id === row.id; });
+      if (i >= 0) list[i] = row; else list.push(row);
+      localSave(db);
+    }
+  }
+  async function deleteEntryRow(id) {
+    if (state.mode === 'server') {
+      var r = await fetch(API + '?id=' + encodeURIComponent(id), { method: 'DELETE' });
+      if (!r.ok) throw new Error('delete');
+    } else {
+      var db = localLoad();
+      var list = (db.entries && db.entries[state.date]) || [];
+      db.entries[state.date] = list.filter(function (x) { return x.id !== id; });
+      localSave(db);
+    }
+  }
+  async function saveMemberName(id, name) {
+    if (state.mode === 'server') {
+      var r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'member', id: id, name: name }) });
+      if (!r.ok) throw new Error('member');
+    } else {
+      var db = localLoad();
+      (db.members || []).forEach(function (m) { if (m.id === id) m.name = name; });
+      localSave(db);
+    }
+  }
+
+  function setStatus(text) {
+    var s = el('status');
+    if (text) { s.innerHTML = '<span class="dot"></span>' + esc(text); return; }
+    if (state.mode === 'local') {
+      s.className = 'status local';
+      s.innerHTML = '<span class="dot"></span>오프라인 모드 (이 브라우저에만 저장)';
+      el('localNotice').style.display = '';
+    } else {
+      s.className = 'status';
+      var t = new Date();
+      s.innerHTML = '<span class="dot"></span>팀 공유 중 · ' +
+        String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ' 업데이트';
+      el('localNotice').style.display = 'none';
+    }
+  }
+
+  // ── 렌더링 ──
+  function render() {
+    renderDate();
+    renderBoard();
+    renderMeetPanel();
+  }
+
+  function renderDate() {
+    var p = state.date.split('-');
+    el('dateText').innerHTML = p[0] + '년 ' + Number(p[1]) + '월 ' + Number(p[2]) + '일 <span class="dow">(' + dowKo(state.date) + ')</span>';
+    el('datePick').value = state.date;
+  }
+
+  function renderBoard() {
+    var members = state.members;
+    var grid = document.createElement('div');
+    grid.className = 'grid';
+    grid.style.gridTemplateColumns = '58px repeat(' + members.length + ', minmax(112px, 1fr))';
+
+    // 헤더
+    var corner = document.createElement('div');
+    corner.className = 'hcell corner';
+    corner.textContent = '시간';
+    grid.appendChild(corner);
+    members.forEach(function (m) {
+      var h = document.createElement('div');
+      h.className = 'hcell';
+      h.title = '이름 변경';
+      h.innerHTML = '<span class="csw" style="background:' + esc(m.color || '#C7B48E') + '"></span>' + esc(m.name) + '<span class="pen">✎</span>';
+      h.addEventListener('click', function () { openNameModal(m); });
+      grid.appendChild(h);
+    });
+
+    // 시간 열
+    var tc = document.createElement('div');
+    tc.className = 'timecol';
+    for (var s = 0; s < SLOTS; s++) {
+      var min = DAY_START + s * STEP;
+      var t = document.createElement('div');
+      t.className = 't' + (min % 60 ? ' half' : '');
+      t.textContent = fmtMin(min);
+      tc.appendChild(t);
+    }
+    grid.appendChild(tc);
+
+    // 구성원 열
+    members.forEach(function (m) {
+      var col = document.createElement('div');
+      col.className = 'mcol';
+      for (var s = 0; s < SLOTS; s++) {
+        var min = DAY_START + s * STEP;
+        var slot = document.createElement('div');
+        slot.className = 'slot' + (min % 60 === 0 ? ' hour' : '') + (min >= LUNCH_S && min < LUNCH_E ? ' lunch' : '');
+        (function (mm, mid) {
+          slot.addEventListener('click', function () { openAddModal(mid, mm); });
+        })(min, m.id);
+        col.appendChild(slot);
+      }
+
+      // 점심 라벨(첫 열에만 글자, 나머지는 배경만)
+      if (m === members[0]) {
+        var lb = document.createElement('div');
+        lb.className = 'lunch-band';
+        lb.style.top = minToY(LUNCH_S) + 'px';
+        lb.style.height = (minToY(LUNCH_E) - minToY(LUNCH_S)) + 'px';
+        lb.innerHTML = '<span>점심</span>';
+        col.appendChild(lb);
+      }
+
+      // 빈 시간(회의 후보) 표시
+      if (state.meetOpen) {
+        state.freeWindows.forEach(function (w) {
+          var f = document.createElement('div');
+          f.className = 'free-band';
+          f.style.top = minToY(w.start) + 'px';
+          f.style.height = (minToY(w.end) - minToY(w.start)) + 'px';
+          f.title = '이 시간에 회의 잡기 (' + fmtMin(w.start) + '~' + fmtMin(w.end) + ')';
+          f.addEventListener('click', function () { openMeetingModal(w); });
+          col.appendChild(f);
+        });
+      }
+
+      // 일정 블록 — 겹치면 나란히 배치
+      var list = state.entries.filter(function (e) { return e.member_id === m.id; })
+        .sort(function (a, b) { return a.start_min - b.start_min || a.end_min - b.end_min; });
+      var lanes = []; // 각 lane의 마지막 end_min
+      var placed = list.map(function (e) {
+        var lane = -1;
+        for (var i = 0; i < lanes.length; i++) if (lanes[i] <= e.start_min) { lane = i; break; }
+        if (lane === -1) { lane = lanes.length; lanes.push(0); }
+        lanes[lane] = e.end_min;
+        return { e: e, lane: lane };
+      });
+      var laneCount = lanes.length || 1;
+      placed.forEach(function (p) {
+        var e = p.e;
+        var top = minToY(Math.max(e.start_min, DAY_START));
+        var bottom = minToY(Math.min(e.end_min, DAY_END));
+        if (bottom <= 0 || top >= SLOTS * SLOT_H) return;
+        var div = document.createElement('div');
+        div.className = 'entry';
+        var color = m.color || '#3E6288';
+        div.style.top = (top + 2) + 'px';
+        div.style.height = Math.max(bottom - top - 4, 22) + 'px';
+        div.style.background = hexToRgba(color, .13);
+        div.style.borderColor = hexToRgba(color, .35);
+        div.style.borderLeft = '4px solid ' + color;
+        div.style.color = '#243B50';
+        if (laneCount > 1) {
+          div.style.left = 'calc(' + (p.lane * 100 / laneCount) + '% + 3px)';
+          div.style.right = 'calc(' + ((laneCount - 1 - p.lane) * 100 / laneCount) + '% + 3px)';
+        }
+        div.innerHTML = '<b>' + esc(e.title) + '</b><span class="tm">' + fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + '</span>';
+        div.title = e.title + (e.memo ? '\n' + e.memo : '');
+        div.addEventListener('click', function (ev) { ev.stopPropagation(); openEditModal(e); });
+        col.appendChild(div);
+      });
+
+      // 오늘이면 현재 시각 표시선
+      if (state.date === todayStr()) {
+        var now = new Date();
+        var nm = now.getHours() * 60 + now.getMinutes();
+        if (nm >= DAY_START && nm <= DAY_END) {
+          var ln = document.createElement('div');
+          ln.className = 'now-line';
+          ln.style.top = minToY(nm) + 'px';
+          col.appendChild(ln);
+        }
+      }
+
+      grid.appendChild(col);
+    });
+
+    var board = el('board');
+    var sx = board.scrollLeft, sy = board.scrollTop;
+    board.innerHTML = '';
+    board.appendChild(grid);
+    board.scrollLeft = sx; board.scrollTop = sy;
+  }
+
+  function minToY(min) { return (min - DAY_START) / STEP * SLOT_H; }
+
+  // ── 회의 시간 찾기 ──
+  function renderMeetPanel() {
+    el('meetPanel').className = 'meet-panel' + (state.meetOpen ? ' open' : '');
+    el('meetToggle').className = 'meet-btn' + (state.meetOpen ? ' on' : '');
+    if (!state.meetOpen) return;
+
+    var wrap = el('meetMembers');
+    wrap.innerHTML = '';
+    state.members.forEach(function (m) {
+      if (!(m.id in state.meetSel)) state.meetSel[m.id] = true;
+      var lb = document.createElement('label');
+      lb.className = 'chip';
+      lb.innerHTML = '<input type="checkbox" ' + (state.meetSel[m.id] ? 'checked' : '') + ' />' +
+        '<span class="sw" style="background:' + esc(m.color || '#C7B48E') + '"></span>' + esc(m.name);
+      lb.querySelector('input').addEventListener('change', function (ev) {
+        state.meetSel[m.id] = ev.target.checked;
+        computeFree(); renderBoard(); renderFreeList();
+      });
+      wrap.appendChild(lb);
+    });
+    computeFree();
+    renderFreeList();
+  }
+
+  function computeFree() {
+    var from = Number(el('meetFrom').value), to = Number(el('meetTo').value);
+    var dur = Number(el('meetDur').value);
+    var sel = state.members.filter(function (m) { return state.meetSel[m.id]; }).map(function (m) { return m.id; });
+    state.freeWindows = [];
+    if (!sel.length || to <= from) return;
+
+    var busy = new Array(SLOTS).fill(false);
+    if (el('meetSkipLunch').checked) {
+      for (var li = (LUNCH_S - DAY_START) / STEP; li < (LUNCH_E - DAY_START) / STEP; li++) busy[li] = true;
+    }
+    state.entries.forEach(function (e) {
+      if (sel.indexOf(e.member_id) === -1) return;
+      var s = Math.max(e.start_min, DAY_START), en = Math.min(e.end_min, DAY_END);
+      for (var i = Math.floor((s - DAY_START) / STEP); i < Math.ceil((en - DAY_START) / STEP); i++) {
+        if (i >= 0 && i < SLOTS) busy[i] = true;
+      }
+    });
+    var s0 = Math.max(0, (from - DAY_START) / STEP), s1 = Math.min(SLOTS, (to - DAY_START) / STEP);
+    var runStart = -1;
+    for (var i = s0; i <= s1; i++) {
+      var free = i < s1 && !busy[i];
+      if (free && runStart === -1) runStart = i;
+      if (!free && runStart !== -1) {
+        var st = DAY_START + runStart * STEP, en2 = DAY_START + i * STEP;
+        if (en2 - st >= dur) state.freeWindows.push({ start: st, end: en2 });
+        runStart = -1;
+      }
+    }
+  }
+
+  function renderFreeList() {
+    var box = el('freeList');
+    box.innerHTML = '';
+    if (!state.freeWindows.length) {
+      box.innerHTML = '<span class="free-none">조건에 맞는 공통 빈 시간이 없습니다. 시간대나 참석자를 조정해 보세요.</span>';
+      return;
+    }
+    state.freeWindows.forEach(function (w) {
+      var b = document.createElement('button');
+      b.className = 'free-item';
+      b.textContent = fmtMin(w.start) + ' ~ ' + fmtMin(w.end) + ' · 회의 잡기 +';
+      b.addEventListener('click', function () { openMeetingModal(w); });
+      box.appendChild(b);
+    });
+  }
+
+  // ── 모달 ──
+  function fillTimeSelects(startSel, endSel, s, e) {
+    startSel.innerHTML = ''; endSel.innerHTML = '';
+    for (var m = DAY_START; m < DAY_END; m += STEP) startSel.add(new Option(fmtMin(m), m));
+    for (var m2 = DAY_START + STEP; m2 <= DAY_END; m2 += STEP) endSel.add(new Option(fmtMin(m2), m2));
+    startSel.value = s; endSel.value = e;
+  }
+  function renderMemberChecks(checkedIds, disabled) {
+    var box = el('fMembers');
+    box.innerHTML = '';
+    state.members.forEach(function (m) {
+      var lb = document.createElement('label');
+      lb.className = 'chip';
+      lb.innerHTML = '<input type="checkbox" value="' + esc(m.id) + '" ' +
+        (checkedIds.indexOf(m.id) >= 0 ? 'checked' : '') + (disabled ? ' disabled' : '') + ' />' +
+        '<span class="sw" style="background:' + esc(m.color || '#C7B48E') + '"></span>' + esc(m.name);
+      box.appendChild(lb);
+    });
+  }
+  function openAddModal(memberId, startMin) {
+    editingId = null;
+    el('entryModalTitle').textContent = '일정 추가';
+    el('fTitle').value = ''; el('fMemo').value = '';
+    fillTimeSelects(el('fStart'), el('fEnd'), startMin, Math.min(startMin + 60, DAY_END));
+    renderMemberChecks([memberId], false);
+    el('fDelete').style.display = 'none';
+    showEntryModal();
+  }
+  function openMeetingModal(w) {
+    editingId = null;
+    el('entryModalTitle').textContent = '회의 잡기';
+    el('fTitle').value = '회의'; el('fMemo').value = '';
+    fillTimeSelects(el('fStart'), el('fEnd'), w.start, w.end);
+    var sel = state.members.filter(function (m) { return state.meetSel[m.id]; }).map(function (m) { return m.id; });
+    renderMemberChecks(sel.length ? sel : state.members.map(function (m) { return m.id; }), false);
+    el('fDelete').style.display = 'none';
+    showEntryModal();
+  }
+  function openEditModal(e) {
+    editingId = e.id;
+    el('entryModalTitle').textContent = '일정 수정';
+    el('fTitle').value = e.title; el('fMemo').value = e.memo || '';
+    fillTimeSelects(el('fStart'), el('fEnd'), e.start_min, e.end_min);
+    renderMemberChecks([e.member_id], true);
+    el('fDelete').style.display = '';
+    showEntryModal();
+  }
+  function showEntryModal() {
+    el('fErr').className = 'err';
+    el('entryModalBg').classList.add('open');
+    setTimeout(function () { el('fTitle').focus(); }, 50);
+  }
+  function closeEntryModal() { el('entryModalBg').classList.remove('open'); }
+
+  async function submitEntry() {
+    var title = el('fTitle').value.trim();
+    var s = Number(el('fStart').value), e = Number(el('fEnd').value);
+    var err = el('fErr');
+    var ids = Array.prototype.slice.call(document.querySelectorAll('#fMembers input:checked'))
+      .map(function (c) { return c.value; });
+    if (!title) { err.textContent = '제목을 입력해 주세요.'; err.className = 'err show'; return; }
+    if (e <= s) { err.textContent = '끝나는 시간이 시작 시간보다 늦어야 합니다.'; err.className = 'err show'; return; }
+    if (!editingId && !ids.length) { err.textContent = '대상을 한 명 이상 선택해 주세요.'; err.className = 'err show'; return; }
+
+    var memo = el('fMemo').value;
+    var btn = el('fSave');
+    btn.disabled = true; btn.textContent = '저장 중…';
+    try {
+      if (editingId) {
+        var old = state.entries.find(function (x) { return x.id === editingId; }) || {};
+        await saveEntryRow({ id: editingId, date: state.date, member_id: old.member_id,
+          start_min: s, end_min: e, title: title, memo: memo });
+      } else {
+        for (var i = 0; i < ids.length; i++) {
+          await saveEntryRow({ id: uid() + i, date: state.date, member_id: ids[i],
+            start_min: s, end_min: e, title: title, memo: memo });
+        }
+      }
+      closeEntryModal();
+      await loadDay(true);
+    } catch (ex) {
+      err.textContent = '저장에 실패했습니다. 네트워크를 확인하고 다시 시도해 주세요.';
+      err.className = 'err show';
+    }
+    btn.disabled = false; btn.textContent = '저장';
+  }
+
+  function openNameModal(m) {
+    renamingId = m.id;
+    el('nName').value = m.name;
+    el('nameModalBg').classList.add('open');
+    setTimeout(function () { el('nName').focus(); el('nName').select(); }, 50);
+  }
+
+  // ── 이벤트 바인딩 ──
+  el('prevDay').addEventListener('click', function () { state.date = shiftDate(state.date, -1); loadDay(); });
+  el('nextDay').addEventListener('click', function () { state.date = shiftDate(state.date, 1); loadDay(); });
+  el('todayBtn').addEventListener('click', function () { state.date = todayStr(); loadDay(); });
+  el('datePick').addEventListener('change', function (ev) {
+    if (ev.target.value) { state.date = ev.target.value; loadDay(); }
+  });
+  el('meetToggle').addEventListener('click', function () {
+    state.meetOpen = !state.meetOpen;
+    renderMeetPanel(); renderBoard();
+  });
+  ['meetFrom', 'meetTo', 'meetDur', 'meetSkipLunch'].forEach(function (id) {
+    el(id).addEventListener('change', function () { computeFree(); renderBoard(); renderFreeList(); });
+  });
+  el('fSave').addEventListener('click', submitEntry);
+  el('fCancel').addEventListener('click', closeEntryModal);
+  el('entryModalBg').addEventListener('click', function (ev) { if (ev.target === ev.currentTarget) closeEntryModal(); });
+  el('fDelete').addEventListener('click', async function () {
+    if (!editingId) return;
+    if (!confirm('이 일정을 삭제할까요?')) return;
+    try {
+      await deleteEntryRow(editingId);
+      closeEntryModal();
+      await loadDay(true);
+    } catch (ex) { alert('삭제에 실패했습니다. 다시 시도해 주세요.'); }
+  });
+  el('nCancel').addEventListener('click', function () { el('nameModalBg').classList.remove('open'); });
+  el('nameModalBg').addEventListener('click', function (ev) { if (ev.target === ev.currentTarget) ev.currentTarget.classList.remove('open'); });
+  el('nSave').addEventListener('click', async function () {
+    var name = el('nName').value.trim();
+    if (!name || !renamingId) return;
+    try {
+      await saveMemberName(renamingId, name);
+      el('nameModalBg').classList.remove('open');
+      await loadDay(true);
+    } catch (ex) { alert('저장에 실패했습니다. 다시 시도해 주세요.'); }
+  });
+  el('nName').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') el('nSave').click(); });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') { closeEntryModal(); el('nameModalBg').classList.remove('open'); }
+  });
+
+  // 회의 패널 시간대 옵션 (기본 09:00~18:00)
+  (function () {
+    var f = el('meetFrom'), t = el('meetTo');
+    for (var m = DAY_START; m < DAY_END; m += 60) f.add(new Option(fmtMin(m), m));
+    for (var m2 = DAY_START + 60; m2 <= DAY_END; m2 += 60) t.add(new Option(fmtMin(m2), m2));
+    f.value = 9 * 60; t.value = 18 * 60;
+  })();
+
+  // 30초마다, 그리고 탭에 다시 돌아왔을 때 자동 새로고침 (팀원이 올린 일정 반영)
+  setInterval(function () {
+    if (state.mode === 'server' && !el('entryModalBg').classList.contains('open')) loadDay(true);
+  }, 30000);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) loadDay(true);
+  });
+
+  loadDay();
+})();
+</script>
+</body>
+</html>
