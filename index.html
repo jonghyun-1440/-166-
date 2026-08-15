@@ -6,6 +6,15 @@
 <title>팀 일정 공유 — 하루 타임테이블</title>
 <meta name="description" content="9명이 함께 쓰는 하루 일정 타임테이블. 각자의 일정을 등록해 서로 공유하고, 모두가 비는 시간에 회의를 잡습니다." />
 <meta name="robots" content="noindex" />
+<!-- 홈 화면에 설치해 앱처럼 쓰기 위한 설정 -->
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#2A4A6B" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<link rel="icon" href="/icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="팀일정" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
@@ -181,6 +190,7 @@
       <button class="nav-btn" id="nextDay" title="다음 날">▶</button>
       <button class="today-btn" id="todayBtn">오늘</button>
     </div>
+    <button class="today-btn" id="installBtn" style="display:none" title="홈 화면에 앱으로 추가">📲 앱 설치</button>
     <button class="meet-btn" id="allAddBtn" style="background:var(--brass)" title="모든 팀원에게 같은 일정을 한 번에 등록">📌 전체 일정 추가</button>
     <button class="meet-btn" id="meetToggle">🕐 회의 시간 찾기</button>
     <div class="status" id="status"><span class="dot"></span>연결 확인 중…</div>
@@ -320,6 +330,29 @@
     try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch (e) { return {}; }
   }
   function localSave(db) { localStorage.setItem(LS_KEY, JSON.stringify(db)); }
+  // 서버에서 받은 하루치를 보관 — 오프라인일 때 이걸 보여준다(최근 14일치만 유지)
+  function cacheDay(date, members, entries) {
+    try {
+      var db = localLoad();
+      db.cache = db.cache || {};
+      db.cache[date] = { members: members, entries: entries, at: new Date().toISOString() };
+      var days = Object.keys(db.cache).sort();
+      while (days.length > 14) delete db.cache[days.shift()];
+      localSave(db);
+    } catch (e) { /* 저장 공간이 없으면 무시 */ }
+  }
+  function cachedDay(date) {
+    var db = localLoad();
+    return (db.cache && db.cache[date]) || null;
+  }
+  function assertWritable() {
+    if (state.mode === 'offline') throw { offline: true };
+  }
+  function writeErrMsg(ex, fallback) {
+    return (ex && ex.offline)
+      ? '오프라인 상태에서는 변경할 수 없습니다. 연결된 뒤 다시 시도해 주세요.'
+      : fallback;
+  }
   function localDefaults() {
     var colors = ['#3E6288', '#A9884F', '#5E8D66', '#B56576', '#6D597A', '#C97B4A', '#40878A', '#7D6FA0', '#8B6D5C'];
     return colors.map(function (c, i) { return { id: 'm' + (i + 1), name: '팀원 ' + (i + 1), color: c, sort: i + 1 }; });
@@ -342,6 +375,7 @@
         state.serverErr = null;
         state.members = j.members || [];
         state.entries = j.entries || [];
+        cacheDay(date, j.members, j.entries); // 오프라인에서 볼 수 있게 보관
         setStatus();
         render();
         maybeMigrateLocal();
@@ -353,6 +387,17 @@
         }
         state.serverErr = (e && typeof e.status === 'number')
           ? e : { status: 0, detail: '네트워크 오류' };
+        // 서버는 있는데 연결이 안 되는 상황 — 마지막으로 받아둔 일정을 보여준다(읽기 전용)
+        var cached = e && e.status !== 503 ? cachedDay(date) : null;
+        if (cached) {
+          state.mode = 'offline';
+          state.cachedAt = cached.at;
+          state.members = cached.members || [];
+          state.entries = cached.entries || [];
+          setStatus();
+          render();
+          return;
+        }
         state.mode = 'local'; // 미설정/최초 실패 → 로컬 모드
       }
     }
@@ -365,6 +410,7 @@
   }
 
   async function saveEntryRow(row) {
+    assertWritable();
     if (state.mode === 'server') {
       var r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'entry', entry: row }) });
@@ -379,6 +425,7 @@
     }
   }
   async function deleteEntryRow(id) {
+    assertWritable();
     if (state.mode === 'server') {
       var r = await fetch(API + '?id=' + encodeURIComponent(id), { method: 'DELETE' });
       if (!r.ok) throw new Error('delete');
@@ -390,6 +437,7 @@
     }
   }
   async function saveMemberName(id, name) {
+    assertWritable();
     if (state.mode === 'server') {
       var r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'member', id: id, name: name }) });
@@ -407,6 +455,7 @@
     if (!r.ok) throw new Error('member-add');
   }
   async function addMemberRow(name) {
+    assertWritable();
     var used = state.members.map(function (m) { return m.color; });
     var color = PALETTE.filter(function (c) { return used.indexOf(c) === -1; })[0] ||
       PALETTE[state.members.length % PALETTE.length];
@@ -421,6 +470,7 @@
     }
   }
   async function removeMemberRow(id) {
+    assertWritable();
     if (state.mode === 'server') {
       var r = await fetch(API + '?member=' + encodeURIComponent(id), { method: 'DELETE' });
       if (!r.ok) throw new Error('member-del');
@@ -442,6 +492,14 @@
       s.innerHTML = '<span class="dot"></span>오프라인 모드 (이 브라우저에만 저장)';
       renderLocalNotice();
       el('localNotice').style.display = '';
+    } else if (state.mode === 'offline') {
+      s.className = 'status local';
+      var at = state.cachedAt ? new Date(state.cachedAt) : null;
+      s.innerHTML = '<span class="dot"></span>오프라인 — 보기 전용' +
+        (at ? ' · ' + String(at.getHours()).padStart(2, '0') + ':' +
+              String(at.getMinutes()).padStart(2, '0') + ' 기준' : '');
+      renderLocalNotice();
+      el('localNotice').style.display = '';
     } else {
       s.className = 'status';
       var t = new Date();
@@ -455,7 +513,10 @@
   function renderLocalNotice() {
     var err = state.serverErr || {};
     var msg;
-    if (err.status === 503) {
+    if (state.mode === 'offline') {
+      msg = '📴 인터넷에 연결되어 있지 않아 <b>마지막으로 받은 일정</b>을 보여주고 있습니다. ' +
+        '연결되면 자동으로 최신 상태가 됩니다. (이 상태에서는 일정을 바꿀 수 없습니다)';
+    } else if (err.status === 503) {
       var b = err.body || {};
       var missing = [];
       if ('hasUrl' in b) {
@@ -828,7 +889,7 @@
       } catch (ex) {
         group.forEach(function (x) { x.start_min = orig.s; x.end_min = orig.e; });
         renderBoard();
-        alert('시간 변경을 저장하지 못했습니다. 다시 시도해 주세요.');
+        alert(writeErrMsg(ex, '시간 변경을 저장하지 못했습니다. 다시 시도해 주세요.'));
       }
     }
     function onCancel() { apply(orig.s, orig.e); cleanup(); }
@@ -1015,7 +1076,7 @@
       closeEntryModal();
       await loadDay(true);
     } catch (ex) {
-      err.textContent = '저장에 실패했습니다. 네트워크를 확인하고 다시 시도해 주세요.';
+      err.textContent = writeErrMsg(ex, '저장에 실패했습니다. 네트워크를 확인하고 다시 시도해 주세요.');
       err.className = 'err show';
     }
     btn.disabled = false; btn.textContent = '저장';
@@ -1066,7 +1127,7 @@
       for (var i = 0; i < g.length; i++) await deleteEntryRow(g[i].id);
       closeEntryModal();
       await loadDay(true);
-    } catch (ex) { alert('삭제에 실패했습니다. 다시 시도해 주세요.'); }
+    } catch (ex) { alert(writeErrMsg(ex, '삭제에 실패했습니다. 다시 시도해 주세요.')); }
   });
   el('nCancel').addEventListener('click', function () { el('nameModalBg').classList.remove('open'); });
   el('nameModalBg').addEventListener('click', function (ev) { if (ev.target === ev.currentTarget) ev.currentTarget.classList.remove('open'); });
@@ -1078,7 +1139,7 @@
       else await addMemberRow(name);
       el('nameModalBg').classList.remove('open');
       await loadDay(true);
-    } catch (ex) { alert('저장에 실패했습니다. 다시 시도해 주세요.'); }
+    } catch (ex) { alert(writeErrMsg(ex, '저장에 실패했습니다. 다시 시도해 주세요.')); }
   });
   el('nDelete').addEventListener('click', async function () {
     if (!renamingId) return;
@@ -1090,7 +1151,7 @@
       delete state.meetSel[renamingId];
       el('nameModalBg').classList.remove('open');
       await loadDay(true);
-    } catch (ex) { alert('제거에 실패했습니다. 다시 시도해 주세요.'); }
+    } catch (ex) { alert(writeErrMsg(ex, '제거에 실패했습니다. 다시 시도해 주세요.')); }
   });
   el('nName').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') el('nSave').click(); });
   document.addEventListener('keydown', function (ev) {
@@ -1105,12 +1166,57 @@
     f.value = 9 * 60; t.value = 18 * 60;
   })();
 
+  // ── 앱으로 설치(PWA) ──
+  function isStandalone() {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  }
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').catch(function () {});
+    });
+  }
+  var installPrompt = null;
+  window.addEventListener('beforeinstallprompt', function (ev) {
+    ev.preventDefault();
+    installPrompt = ev;
+    if (!isStandalone()) el('installBtn').style.display = '';
+  });
+  window.addEventListener('appinstalled', function () {
+    installPrompt = null; el('installBtn').style.display = 'none';
+  });
+  el('installBtn').addEventListener('click', async function () {
+    if (installPrompt) {
+      installPrompt.prompt();
+      await installPrompt.userChoice;
+      installPrompt = null;
+      el('installBtn').style.display = 'none';
+      return;
+    }
+    alert('홈 화면에 앱으로 추가하기\n\n' +
+      '• 아이폰(Safari): 아래 공유 버튼 → "홈 화면에 추가"\n' +
+      '• 안드로이드(Chrome): 오른쪽 위 ⋮ → "앱 설치" 또는 "홈 화면에 추가"\n' +
+      '• PC(Chrome/Edge): 주소창 오른쪽 설치 아이콘');
+  });
+  // 아이폰 사파리는 설치 이벤트가 없어 버튼을 직접 띄운다
+  if (/iP(hone|ad|od)/.test(navigator.userAgent) && !isStandalone()) {
+    el('installBtn').style.display = '';
+  }
+  // 인터넷이 돌아오면 자동으로 다시 연결
+  window.addEventListener('online', function () {
+    if (state.mode === 'offline') { state.mode = null; state.serverErr = null; loadDay(true); }
+  });
+
   // 30초마다, 그리고 탭에 다시 돌아왔을 때 자동 새로고침 (팀원이 올린 일정 반영)
   setInterval(function () {
-    if (state.mode === 'server' && !dragActive && !el('entryModalBg').classList.contains('open')) loadDay(true);
+    if (dragActive || el('entryModalBg').classList.contains('open')) return;
+    if (state.mode === 'server') loadDay(true);
+    else if (state.mode === 'offline') { state.mode = null; state.serverErr = null; loadDay(true); }
   }, 30000);
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) loadDay(true);
+    if (!document.hidden) {
+      if (state.mode === 'offline') { state.mode = null; state.serverErr = null; }
+      loadDay(true);
+    }
   });
 
   loadDay();

@@ -1,0 +1,17 @@
+{
+  "name": "팀 일정 공유",
+  "short_name": "팀일정",
+  "description": "하루 일정 타임테이블을 팀원과 함께 쓰는 일정 공유 앱",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F6F8FA",
+  "theme_color": "#2A4A6B",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
