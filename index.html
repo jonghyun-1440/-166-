@@ -135,9 +135,24 @@
     font-size: 12px; line-height: 1.35; border: 1px solid transparent; z-index: 3; background-color: #fff;
     user-select: none; -webkit-user-select: none; touch-action: none; }
   .entry:hover { filter: brightness(.97); box-shadow: 0 2px 8px rgba(30,58,80,.16); }
-  .entry.dragging { opacity: .85; box-shadow: 0 8px 20px rgba(30,58,80,.3); z-index: 8; cursor: grabbing; }
+  .entry.dragging { opacity: .95; box-shadow: 0 8px 20px rgba(30,58,80,.3); z-index: 8; cursor: grabbing; }
+  .entry.armed { box-shadow: 0 0 0 2px var(--brass), 0 6px 16px rgba(30,58,80,.28); z-index: 8; }
   .entry .rz { position: absolute; left: 0; right: 0; height: 7px; cursor: ns-resize; }
   .entry .rz-top { top: 0; } .entry .rz-bot { bottom: 0; }
+  /* 드래그 중 시간 표시 — 작은 화면에서도 몇 시로 옮겨지는지 크게 보이게 */
+  .entry .livetime { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    background: rgba(31,58,85,.92); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .02em;
+    padding: 3px 10px; border-radius: 99px; white-space: nowrap; pointer-events: none; z-index: 2; }
+
+  /* 손가락 조작 기기: 시간 조절 손잡이를 크게 + 눈에 보이게 */
+  body.touch .entry { touch-action: auto; }
+  body.touch .entry .rz { height: 16px; }
+  body.touch .entry.short .rz { height: 9px; }
+  body.touch .entry .rz::after { content: ''; position: absolute; left: 50%; transform: translateX(-50%);
+    width: 20px; height: 3px; border-radius: 2px; background: currentColor; opacity: .3; }
+  body.touch .entry .rz-top::after { top: 2px; }
+  body.touch .entry .rz-bot::after { bottom: 2px; }
+  body.touch .entry.armed .rz::after { opacity: .85; background: var(--brass); width: 26px; height: 4px; }
   /* 여러 명이 함께하는 공통 일정 — 해당 열들을 가로로 잇는 하나의 막대 */
   .span-layer { position: absolute; inset: 0; pointer-events: none; }
   .entry.band { right: auto; z-index: 2; pointer-events: auto; display: flex; align-items: center; gap: 9px; }
@@ -182,6 +197,29 @@
   .err { color: #B14A4A; font-size: 12.5px; margin-top: 8px; display: none; }
   .err.show { display: block; }
 
+  /* ── 엑셀 주고받기 ── */
+  .xl-sec { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
+  .xl-sec:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+  .xl-t { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+  .xl-help { font-size: 12px; color: var(--muted); line-height: 1.55; margin-top: 8px; }
+  .xl-help code { background: var(--soft); border-radius: 4px; padding: 1px 5px; font-size: 11.5px; }
+  .xl-sec input[type=file] { width: 100%; font-size: 12.5px; border: 1px dashed var(--line); border-radius: 9px;
+    padding: 10px; background: #FBFCFD; }
+  .xl-sec input[type=date] { flex: 1; border: 1px solid var(--line); border-radius: 9px; padding: 8px; background: #fff; }
+  .xl-preview { margin-top: 10px; font-size: 12.5px; }
+  .xl-preview .sum { background: var(--soft); border-radius: 9px; padding: 9px 11px; line-height: 1.6; }
+  .xl-preview .sum b { color: var(--navy-2); }
+  .xl-preview .bad { margin-top: 8px; background: #FBF1F1; border: 1px solid #E4C6C6; color: #8E4141;
+    border-radius: 9px; padding: 8px 11px; max-height: 120px; overflow: auto; font-size: 11.5px; line-height: 1.5; }
+  .xl-preview .warn { margin-top: 8px; background: #FBF4E3; border: 1px solid #E8D8B0; color: #7A5F2C;
+    border-radius: 9px; padding: 8px 11px; font-size: 11.5px; }
+
+  .hint-toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 95;
+    background: rgba(31,58,85,.94); color: #fff; font-size: 13px; line-height: 1.5; text-align: center;
+    padding: 11px 16px; border-radius: 12px; max-width: min(92vw, 360px); box-shadow: 0 8px 24px rgba(0,0,0,.28);
+    transition: opacity .4s; }
+  .hint-toast.out { opacity: 0; }
+
   #wideBtn { display: none; }
   @media (max-width: 760px) {
     #wideBtn { display: inline-block; }
@@ -221,6 +259,7 @@
       <button class="nav-btn" id="nextDay" title="다음 날">▶</button>
       <button class="today-btn" id="todayBtn">오늘</button>
     </div>
+    <button class="today-btn" id="xlBtn" title="엑셀로 내려받기 / 엑셀로 일정 올리기">📊 엑셀</button>
     <button class="today-btn" id="wideBtn" title="넓게 보기 / 한 화면에 보기">↔ 넓게</button>
     <button class="today-btn" id="installBtn" style="display:none" title="홈 화면에 앱으로 추가">📲 앱 설치</button>
     <button class="meet-btn" id="allAddBtn" style="background:var(--brass)" title="모든 팀원에게 같은 일정을 한 번에 등록">📌 전체 일정 추가</button>
@@ -287,6 +326,42 @@
       <button class="btn" id="fCancel">취소</button>
       <button class="btn primary" id="fSave">저장</button>
     </div>
+  </div>
+</div>
+
+<!-- 엑셀 주고받기 모달 -->
+<div class="modal-bg" id="xlModalBg">
+  <div class="modal" style="max-width: 520px">
+    <h3>엑셀로 일정 주고받기</h3>
+
+    <div class="xl-sec">
+      <div class="xl-t">📥 일정표 내려받기</div>
+      <div class="f-row">
+        <label class="t">기간</label>
+        <div class="time-pair">
+          <input type="date" id="xlFrom" /><span>~</span><input type="date" id="xlTo" />
+        </div>
+      </div>
+      <button class="btn" id="xlDown" style="width:100%">엑셀 파일 받기</button>
+      <div class="xl-help">받은 파일이 곧 업로드 양식입니다. 빈 날짜를 받아 양식으로 쓰셔도 됩니다.</div>
+    </div>
+
+    <div class="xl-sec">
+      <div class="xl-t">📤 엑셀로 일정 올리기</div>
+      <div class="xl-help">
+        <b>날짜 · 이름 · 시작 · 종료 · 일정 · 메모</b> 순서로 채운 파일을 올리면 자동으로 등록됩니다.
+        (예: <code>2026-08-17</code> · <code>오재준</code> · <code>09:00</code> · <code>10:00</code> · <code>거래처 미팅</code>)
+      </div>
+      <input type="file" id="xlFile" accept=".xlsx,.xls,.csv" />
+      <div class="mem-list" style="margin-top:10px">
+        <label class="chip"><input type="checkbox" id="xlReplace" /> 같은 날짜의 기존 일정을 지우고 넣기</label>
+        <label class="chip"><input type="checkbox" id="xlAddMembers" checked /> 명단에 없는 이름은 팀원으로 추가</label>
+      </div>
+      <div id="xlPreview" class="xl-preview"></div>
+      <button class="btn primary" id="xlUpload" style="width:100%; display:none">등록하기</button>
+    </div>
+
+    <div class="btns"><button class="btn" id="xlClose" style="flex:1">닫기</button></div>
   </div>
 </div>
 
@@ -497,6 +572,7 @@
       PALETTE[state.members.length % PALETTE.length];
     var sort = state.members.reduce(function (mx, m) { return Math.max(mx, m.sort || 0); }, 0) + 1;
     var row = { id: 'm' + uid(), name: name, color: color, sort: sort };
+    state.members = state.members.concat([row]); // 연달아 추가할 때 색·순서가 겹치지 않도록
     if (state.mode === 'server') {
       await postMemberRow(row);
     } else {
@@ -857,8 +933,10 @@
     if (bottom <= 0 || top >= SLOTS * SLOT_H) return null;
     var div = document.createElement('div');
     div.className = 'entry';
+    var h = Math.max(bottom - top - 4, 22);
     div.style.top = (top + 2) + 'px';
-    div.style.height = Math.max(bottom - top - 4, 22) + 'px';
+    div.style.height = h + 'px';
+    if (h < 46) div.classList.add('short'); // 짧은 블록은 손잡이를 작게
     div.style.backgroundImage = 'linear-gradient(' + hexToRgba(color, .13) + ',' + hexToRgba(color, .13) + ')';
     div.style.borderColor = hexToRgba(color, .35);
     div.style.borderLeft = '4px solid ' + color;
@@ -879,33 +957,65 @@
   }
 
   // ── 일정 블록 드래그(이동) / 가장자리 리사이즈(시간 조절) ──
-  var dragActive = false;
+  // 손가락(터치)에서는 '길게 누르기'로 시작해야 실수로 옮겨지지 않는다.
+  var dragActive = false;   // 드래그 중 자동 새로고침 중지용
+  var dragArmed = false;    // 터치에서 길게 눌러 드래그가 시작된 상태
+  var HOLD_MS = 320;
+
+  // 드래그가 시작되면 화면이 같이 스크롤되지 않도록 막는다
+  document.addEventListener('touchmove', function (ev) {
+    if (dragArmed && ev.cancelable) ev.preventDefault();
+  }, { passive: false });
+
   function startEntryDrag(ev, group, div) {
     if (ev.button !== undefined && ev.button !== 0) return; // 마우스 왼쪽 버튼만
-    ev.preventDefault();
-    ev.stopPropagation();
+    var touch = ev.pointerType === 'touch' || ev.pointerType === 'pen';
     var entry = group[0];
     var mode = ev.target.classList.contains('rz-top') ? 'top' :
                ev.target.classList.contains('rz-bot') ? 'bot' : 'move';
     var startY = ev.clientY;
+    var baseTop = parseFloat(div.style.top) - minToY(entry.start_min); // 밴드는 헤더 높이만큼 더해져 있다
     var orig = { s: entry.start_min, e: entry.end_min };
     var cur = { s: orig.s, e: orig.e };
-    var moved = false;
-    dragActive = true;
+    var moved = false, armed = !touch, aborted = false, holdTimer = null;
+
+    ev.stopPropagation();
+    if (!touch) ev.preventDefault();
     try { div.setPointerCapture(ev.pointerId); } catch (ignored) {}
+
+    if (touch) {
+      // 손가락은 잠깐 누르고 있어야 드래그가 시작된다 (그 전에 움직이면 화면 스크롤)
+      holdTimer = setTimeout(function () {
+        if (aborted) return;
+        armed = true; dragArmed = true; dragActive = true;
+        div.classList.add('armed');
+        if (navigator.vibrate) { try { navigator.vibrate(18); } catch (e) {} }
+      }, HOLD_MS);
+    } else {
+      dragActive = true;
+    }
 
     function apply(ns, ne) {
       cur.s = ns; cur.e = ne;
-      div.style.top = (minToY(ns) + 2) + 'px';
-      div.style.height = Math.max(minToY(ne) - minToY(ns) - 4, 22) + 'px';
+      div.style.top = (baseTop + minToY(ns)) + 'px';
+      div.style.height = Math.max(minToY(ne) - minToY(ns) - 4, 20) + 'px';
       var tm = div.querySelector('.tm');
       if (tm) tm.textContent = fmtMin(ns) + '~' + fmtMin(ne);
+      var lb = div.querySelector('.livetime');
+      if (lb) lb.textContent = fmtMin(ns) + ' ~ ' + fmtMin(ne);
     }
     function onMove(e2) {
       var dy = e2.clientY - startY;
-      if (!moved && Math.abs(dy) < 5) return; // 살짝 움직인 건 클릭으로 취급
+      if (!armed) {                       // 아직 길게 누르기 전 — 움직이면 드래그 취소(화면 스크롤)
+        if (Math.abs(dy) > 8 || Math.abs(e2.clientX - ev.clientX) > 8) {
+          aborted = true; clearTimeout(holdTimer); cleanup();
+        }
+        return;
+      }
+      if (!moved && Math.abs(dy) < (touch ? 3 : 5)) return; // 살짝 움직인 건 클릭으로 취급
       moved = true;
       div.classList.add('dragging');
+      showLiveTime(div);
       var dmin = Math.round(dy / SLOT_H) * STEP;
       if (mode === 'move') {
         var dur = orig.e - orig.s;
@@ -918,15 +1028,18 @@
       }
     }
     function cleanup() {
-      dragActive = false;
-      div.classList.remove('dragging');
+      clearTimeout(holdTimer);
+      dragActive = false; dragArmed = false;
+      div.classList.remove('dragging'); div.classList.remove('armed');
       div.removeEventListener('pointermove', onMove);
       div.removeEventListener('pointerup', onUp);
       div.removeEventListener('pointercancel', onCancel);
     }
     async function onUp() {
+      var wasAborted = aborted;
       cleanup();
-      if (!moved) { openEditModal(group); return; } // 움직이지 않았으면 클릭 → 수정 창
+      if (wasAborted) return;                              // 화면을 넘긴 것이므로 아무 일도 하지 않음
+      if (!moved) { openEditModal(group); return; }        // 그냥 눌렀다 떼면 수정 창
       if (cur.s === orig.s && cur.e === orig.e) return;
       group.forEach(function (x) { x.start_min = cur.s; x.end_min = cur.e; }); // 화면 먼저 반영
       renderBoard();
@@ -946,6 +1059,14 @@
     div.addEventListener('pointermove', onMove);
     div.addEventListener('pointerup', onUp);
     div.addEventListener('pointercancel', onCancel);
+  }
+
+  // 드래그 중에는 시간을 큼직하게 띄워 준다 (좁은 화면에서 블록 글씨가 작아서)
+  function showLiveTime(div) {
+    if (div.querySelector('.livetime')) return;
+    var b = document.createElement('div');
+    b.className = 'livetime';
+    div.appendChild(b);
   }
 
   // ── 회의 시간 찾기 ──
@@ -1205,7 +1326,11 @@
   });
   el('nName').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') el('nSave').click(); });
   document.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Escape') { closeEntryModal(); el('nameModalBg').classList.remove('open'); }
+    if (ev.key === 'Escape') {
+      closeEntryModal();
+      el('nameModalBg').classList.remove('open');
+      el('xlModalBg').classList.remove('open');
+    }
   });
 
   // 회의 패널 시간대 옵션 (기본 09:00~18:00)
@@ -1215,6 +1340,322 @@
     for (var m2 = DAY_START + 60; m2 <= DAY_END; m2 += 60) t.add(new Option(fmtMin(m2), m2));
     f.value = 9 * 60; t.value = 18 * 60;
   })();
+
+  // ══ 엑셀로 주고받기 ══════════════════════════════════════════
+  var XL = null;
+  function loadXLSX() {                       // 필요할 때만 불러온다 (용량이 커서)
+    if (XL) return Promise.resolve(XL);
+    if (window.XLSX) { XL = window.XLSX; return Promise.resolve(XL); }
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = '/vendor/xlsx.min.js';
+      s.onload = function () { XL = window.XLSX; resolve(XL); };
+      s.onerror = function () { reject(new Error('lib')); };
+      document.head.appendChild(s);
+    });
+  }
+
+  // 파일 이름을 확실히 붙여서 내려받기
+  function saveFile(data, filename) {
+    var blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename; a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 2000);
+  }
+
+  async function fetchDayData(date) {
+    if (state.mode === 'server') {
+      var r = await fetch(API + '?date=' + date);
+      if (!r.ok) throw new Error('load');
+      return await r.json();
+    }
+    var db = localLoad();
+    return { members: db.members || [], entries: (db.entries && db.entries[date]) || [] };
+  }
+  async function saveEntriesBulk(rows) {
+    assertWritable();
+    if (state.mode === 'server') {
+      for (var i = 0; i < rows.length; i += 200) {
+        var r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'entries', entries: rows.slice(i, i + 200) }) });
+        if (!r.ok) throw new Error('bulk');
+      }
+    } else {
+      for (var j = 0; j < rows.length; j++) await saveEntryRow(rows[j]);
+    }
+  }
+  async function deleteDayEntries(date) {
+    assertWritable();
+    if (state.mode === 'server') {
+      var r = await fetch(API + '?date=' + encodeURIComponent(date), { method: 'DELETE' });
+      if (!r.ok) throw new Error('day-del');
+    } else {
+      var db = localLoad();
+      if (db.entries) { db.entries[date] = []; localSave(db); }
+    }
+  }
+
+  // ── 엑셀 칸 해석 (엑셀에서 다시 저장하면 형식이 바뀔 수 있어 넉넉하게 받아들인다) ──
+  function pad2(n) { return String(n).padStart(2, '0'); }
+  function parseDateCell(v) {
+    if (v == null || v === '') return null;
+    if (v instanceof Date && !isNaN(v)) {
+      return v.getFullYear() + '-' + pad2(v.getMonth() + 1) + '-' + pad2(v.getDate());
+    }
+    if (typeof v === 'number' && v > 1000) {           // 엑셀 날짜 일련번호
+      var d = new Date(Math.round((v - 25569) * 86400000));
+      return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate());
+    }
+    var s = String(v).trim().replace(/[.\/]/g, '-').replace(/\s+/g, '').replace(/-+$/, '');
+    var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) return m[1] + '-' + pad2(m[2]) + '-' + pad2(m[3]);
+    m = s.match(/^(\d{1,2})-(\d{1,2})$/);              // '8-17' → 올해로
+    if (m) return new Date().getFullYear() + '-' + pad2(m[1]) + '-' + pad2(m[2]);
+    return null;
+  }
+  function parseTimeCell(v) {
+    if (v == null || v === '') return null;
+    if (v instanceof Date && !isNaN(v)) return v.getHours() * 60 + v.getMinutes();
+    if (typeof v === 'number') {
+      if (v > 0 && v < 1) return Math.round(v * 1440);   // 엑셀 시간(하루의 비율)
+      if (v >= 1 && v <= 24) return Math.round(v * 60);  // '9' → 09:00
+      return null;
+    }
+    var s = String(v).trim();
+    var pm = /오후|PM/i.test(s), am = /오전|AM/i.test(s);
+    var m = s.match(/(\d{1,2})\s*[:시]\s*(\d{1,2})?/);
+    if (!m) {
+      var only = s.match(/^(\d{1,2})$/);
+      if (!only) return null;
+      m = [null, only[1], '0'];
+    }
+    var h = Number(m[1]), mi = Number(m[2] || 0);
+    if (pm && h < 12) h += 12;
+    if (am && h === 12) h = 0;
+    if (h > 23 || mi > 59) return null;
+    return h * 60 + mi;
+  }
+
+  function openXlModal() {
+    el('xlFrom').value = state.date;
+    el('xlTo').value = state.date;
+    el('xlPreview').innerHTML = '';
+    el('xlUpload').style.display = 'none';
+    el('xlFile').value = '';
+    pendingUpload = null;
+    el('xlModalBg').classList.add('open');
+  }
+
+  // ── 내려받기 ──
+  async function downloadXlsx() {
+    var btn = el('xlDown'), from = el('xlFrom').value, to = el('xlTo').value;
+    if (!from || !to || to < from) { alert('기간을 확인해 주세요.'); return; }
+    var days = Math.round((new Date(to) - new Date(from)) / 86400000) + 1;
+    if (days > 62) { alert('한 번에 최대 62일까지 받을 수 있습니다.'); return; }
+    btn.disabled = true; btn.textContent = '만드는 중…';
+    try {
+      var X = await loadXLSX();
+      var rows = [['날짜', '이름', '시작', '종료', '일정', '메모']];
+      var members = state.members;
+      for (var i = 0; i < days; i++) {
+        var d = shiftDate(from, i);
+        var data = await fetchDayData(d);
+        if (data.members && data.members.length) members = data.members;
+        var byId = {};
+        members.forEach(function (m) { byId[m.id] = m.name; });
+        (data.entries || []).slice()
+          .sort(function (a, b) {
+            return (members.findIndex(function (m) { return m.id === a.member_id; }) -
+                    members.findIndex(function (m) { return m.id === b.member_id; })) ||
+                   (a.start_min - b.start_min);
+          })
+          .forEach(function (e) {
+            rows.push([d, byId[e.member_id] || '?', fmtMin(e.start_min), fmtMin(e.end_min),
+              e.title || '', e.memo || '']);
+          });
+      }
+      var ws = X.utils.aoa_to_sheet(rows);
+      ws['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 28 }, { wch: 32 }];
+      var wb = X.utils.book_new();
+      X.utils.book_append_sheet(wb, ws, '일정');
+      var help = [['일정표 엑셀 — 작성 방법'], [''],
+        ['1. "일정" 시트에 한 줄에 일정 하나씩 적습니다.'],
+        ['2. 날짜: 2026-08-17 형식 (비워 두면 올릴 때 보고 있던 날짜로 들어갑니다)'],
+        ['3. 이름: 아래 팀원 명단과 똑같이 적어 주세요.'],
+        ['4. 시작 / 종료: 09:00, 14:30 처럼 적습니다. (오전 9시, 9시 30분 도 인식합니다)'],
+        ['5. 일정: 표에 표시될 제목입니다. 메모는 비워도 됩니다.'],
+        ['6. 화면에 보이는 시간대는 06:00~22:00 입니다.'], [''],
+        ['※ 여러 사람이 함께하는 일정은 사람마다 한 줄씩 적으면 한 줄 막대로 합쳐집니다.'], [''],
+        ['[ 팀원 명단 ]']];
+      members.forEach(function (m) { help.push([m.name]); });
+      var wsh = X.utils.aoa_to_sheet(help);
+      wsh['!cols'] = [{ wch: 60 }];
+      X.utils.book_append_sheet(wb, wsh, '작성방법');
+      // 파일명은 영문으로 — 한글 파일명을 지우고 'download'로 저장해 버리는 환경이 있다
+      saveFile(X.write(wb, { bookType: 'xlsx', type: 'array' }),
+        'team-schedule_' + from + (from === to ? '' : '_' + to) + '.xlsx');
+    } catch (ex) {
+      alert('엑셀 파일을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    }
+    btn.disabled = false; btn.textContent = '엑셀 파일 받기';
+  }
+
+  // ── 올리기 ──
+  var pendingUpload = null;
+  async function readUploadFile(file) {
+    var box = el('xlPreview');
+    box.innerHTML = '<div class="sum">파일을 읽는 중…</div>';
+    el('xlUpload').style.display = 'none';
+    pendingUpload = null;
+    try {
+      var X = await loadXLSX();
+      var buf = await file.arrayBuffer();
+      var wb = X.read(buf, { type: 'array', cellDates: true });
+      var sheetName = wb.SheetNames.filter(function (n) { return n !== '작성방법'; })[0] || wb.SheetNames[0];
+      var aoa = X.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, raw: true, defval: '' });
+
+      // 머리글 줄 찾기 (없으면 날짜·이름·시작·종료·일정·메모 순서로 간주)
+      var col = { date: 0, name: 1, start: 2, end: 3, title: 4, memo: 5 }, first = 0, found = false;
+      for (var i = 0; i < Math.min(aoa.length, 10) && !found; i++) {
+        var head = (aoa[i] || []).map(function (c) { return String(c == null ? '' : c).replace(/\s/g, ''); });
+        if (head.indexOf('이름') === -1) continue;
+        found = true; first = i + 1;
+        col = { date: -1, name: -1, start: -1, end: -1, title: -1, memo: -1 };
+        head.forEach(function (h, k) {
+          if (/^날짜/.test(h)) col.date = k;
+          else if (/^(이름|팀원|담당)/.test(h)) col.name = k;
+          else if (/^시작/.test(h)) col.start = k;
+          else if (/^(종료|끝)/.test(h)) col.end = k;
+          else if (/^(일정|제목|내용)/.test(h)) col.title = k;
+          else if (/^(메모|비고)/.test(h)) col.memo = k;
+        });
+      }
+
+      var byName = {};
+      state.members.forEach(function (m) { byName[m.name.replace(/\s/g, '')] = m; });
+      var ok = [], bad = [], newNames = [], dates = {}, outside = 0;
+      for (var r = first; r < aoa.length; r++) {
+        var row = aoa[r] || [];
+        var cell = function (k) { return k >= 0 ? row[k] : ''; };
+        var name = String(cell(col.name) || '').trim();
+        var title = String(cell(col.title) || '').trim();
+        var rawDate = cell(col.date), rawS = cell(col.start), rawE = cell(col.end);
+        if (!name && !title && !rawS && !rawE && !rawDate) continue; // 빈 줄
+        var lineNo = r + 1;
+        var date = rawDate === '' || rawDate == null ? state.date : parseDateCell(rawDate);
+        var s = parseTimeCell(rawS), e2 = parseTimeCell(rawE);
+        if (!date) { bad.push(lineNo + '번째 줄: 날짜 형식을 알 수 없습니다 (' + rawDate + ')'); continue; }
+        if (!name) { bad.push(lineNo + '번째 줄: 이름이 비어 있습니다'); continue; }
+        if (!title) { bad.push(lineNo + '번째 줄: 일정(제목)이 비어 있습니다'); continue; }
+        if (s == null || e2 == null) { bad.push(lineNo + '번째 줄: 시간 형식을 알 수 없습니다 (' + rawS + ' ~ ' + rawE + ')'); continue; }
+        if (e2 <= s) { bad.push(lineNo + '번째 줄: 종료 시간이 시작보다 빠릅니다'); continue; }
+        var key = name.replace(/\s/g, '');
+        if (!byName[key] && newNames.indexOf(name) === -1) newNames.push(name);
+        if (s < DAY_START || e2 > DAY_END) outside++;
+        dates[date] = true;
+        ok.push({ date: date, name: name, key: key, start_min: s, end_min: e2,
+          title: title.slice(0, 60), memo: String(cell(col.memo) || '').slice(0, 500) });
+      }
+
+      var dateList = Object.keys(dates).sort();
+      var html = '<div class="sum">등록할 일정 <b>' + ok.length + '건</b>' +
+        (dateList.length ? ' · 날짜 <b>' + dateList[0] + (dateList.length > 1 ? ' ~ ' + dateList[dateList.length - 1] : '') + '</b>' : '') +
+        (newNames.length ? '<br>명단에 없는 이름: <b>' + newNames.map(esc).join(', ') + '</b>' : '') + '</div>';
+      if (outside) html += '<div class="warn">' + outside + '건은 화면 표시 범위(06:00~22:00) 밖이라 표에 보이지 않을 수 있습니다.</div>';
+      if (bad.length) html += '<div class="bad"><b>확인이 필요한 줄 ' + bad.length + '개</b><br>' +
+        bad.slice(0, 20).map(esc).join('<br>') + (bad.length > 20 ? '<br>…' : '') + '</div>';
+      box.innerHTML = html;
+
+      if (ok.length) {
+        pendingUpload = { rows: ok, newNames: newNames, dates: dateList };
+        el('xlUpload').style.display = '';
+        el('xlUpload').textContent = ok.length + '건 등록하기';
+      }
+    } catch (ex) {
+      box.innerHTML = '<div class="bad">파일을 읽지 못했습니다. 엑셀(.xlsx) 또는 CSV 파일인지 확인해 주세요.</div>';
+    }
+  }
+
+  async function commitUpload() {
+    if (!pendingUpload) return;
+    var btn = el('xlUpload');
+    btn.disabled = true; btn.textContent = '등록 중…';
+    try {
+      var byName = {};
+      state.members.forEach(function (m) { byName[m.name.replace(/\s/g, '')] = m; });
+
+      // 명단에 없는 이름 처리
+      if (pendingUpload.newNames.length) {
+        if (!el('xlAddMembers').checked) {
+          var known = pendingUpload.rows.filter(function (r) { return byName[r.key]; });
+          if (!known.length) throw new Error('no-member');
+          pendingUpload.rows = known;
+        } else {
+          for (var n = 0; n < pendingUpload.newNames.length; n++) {
+            var nm = pendingUpload.newNames[n];
+            await addMemberRow(nm);
+          }
+          var fresh = await fetchDayData(state.date);
+          (fresh.members || []).forEach(function (m) { byName[m.name.replace(/\s/g, '')] = m; });
+        }
+      }
+
+      if (el('xlReplace').checked) {
+        for (var d = 0; d < pendingUpload.dates.length; d++) await deleteDayEntries(pendingUpload.dates[d]);
+      }
+
+      var rows = [];
+      pendingUpload.rows.forEach(function (r, i) {
+        var m = byName[r.key];
+        if (!m) return;
+        rows.push({ id: uid() + '-' + i, date: r.date, member_id: m.id,
+          start_min: r.start_min, end_min: r.end_min, title: r.title, memo: r.memo });
+      });
+      if (!rows.length) throw new Error('empty');
+      await saveEntriesBulk(rows);
+
+      el('xlModalBg').classList.remove('open');
+      pendingUpload = null;
+      await loadDay(true);
+      alert(rows.length + '건이 등록되었습니다.');
+    } catch (ex) {
+      alert(writeErrMsg(ex, ex && ex.message === 'no-member'
+        ? '명단에 없는 이름뿐입니다. "명단에 없는 이름은 팀원으로 추가"를 켜거나 이름을 맞춰 주세요.'
+        : '등록에 실패했습니다. 잠시 후 다시 시도해 주세요.'));
+    }
+    btn.disabled = false;
+    if (pendingUpload) btn.textContent = pendingUpload.rows.length + '건 등록하기';
+  }
+
+  el('xlBtn').addEventListener('click', openXlModal);
+  el('xlClose').addEventListener('click', function () { el('xlModalBg').classList.remove('open'); });
+  el('xlModalBg').addEventListener('click', function (ev) {
+    if (ev.target === ev.currentTarget) ev.currentTarget.classList.remove('open');
+  });
+  el('xlDown').addEventListener('click', downloadXlsx);
+  el('xlFile').addEventListener('change', function (ev) {
+    if (ev.target.files && ev.target.files[0]) readUploadFile(ev.target.files[0]);
+  });
+  el('xlUpload').addEventListener('click', commitUpload);
+
+  // 손가락으로 쓰는 기기 표시 (손잡이 크기·길게 누르기 안내에 사용)
+  if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
+    document.body.classList.add('touch');
+    if (!localStorage.getItem('mlk-sched-hint')) {
+      localStorage.setItem('mlk-sched-hint', '1');
+      setTimeout(function () {
+        var t = document.createElement('div');
+        t.className = 'hint-toast';
+        t.innerHTML = '일정을 <b>길게 누른 뒤</b> 끌면 시간이 옮겨집니다.<br>위·아래 <b>손잡이</b>를 끌면 시작/끝 시간이 조절돼요.';
+        document.body.appendChild(t);
+        setTimeout(function () { t.classList.add('out'); }, 5200);
+        setTimeout(function () { t.remove(); }, 6000);
+      }, 1200);
+    }
+  }
 
   // 좁은 화면에서 '한 화면에 보기' ↔ '넓게 보기' 전환
   function syncWideBtn() {

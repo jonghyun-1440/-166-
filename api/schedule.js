@@ -49,6 +49,26 @@ function sbHeaders() {
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// 들어온 일정 한 건을 저장 가능한 형태로 정리 — 형식이 어긋나면 null
+function normalizeEntry(e) {
+  const startMin = Number(e && e.start_min), endMin = Number(e && e.end_min);
+  const row = {
+    id: String((e && e.id) || '').slice(0, 60),
+    date: String((e && e.date) || ''),
+    member_id: String((e && e.member_id) || '').slice(0, 40),
+    start_min: startMin,
+    end_min: endMin,
+    title: String((e && e.title) || '').trim().slice(0, 60),
+    memo: String((e && e.memo) || '').slice(0, 500)
+  };
+  if (!row.id || !DATE_RE.test(row.date) || !row.member_id || !row.title ||
+      !Number.isInteger(startMin) || !Number.isInteger(endMin) ||
+      startMin < 0 || endMin > 1440 || endMin <= startMin) {
+    return null;
+  }
+  return row;
+}
+
 module.exports = async (req, res) => {
   const configured = !!(SUPABASE_URL && SERVICE_KEY);
   if (req.method === 'GET' && (req.query || {}).health === '1') {
@@ -131,24 +151,30 @@ module.exports = async (req, res) => {
         return res.status(200).json({ ok: true });
       }
 
+      // 엑셀 업로드 등 여러 건 한 번에 저장
+      if (b.type === 'entries') {
+        const list = Array.isArray(b.entries) ? b.entries : [];
+        if (!list.length) return res.status(400).json({ error: 'no-entries' });
+        if (list.length > 500) return res.status(400).json({ error: 'too-many' });
+        const rows = [];
+        for (const e of list) {
+          const row = normalizeEntry(e);
+          if (!row) return res.status(400).json({ error: 'bad-entry' });
+          rows.push(row);
+        }
+        const resp = await fetch(entriesTable, {
+          method: 'POST',
+          headers: { ...sbHeaders(), Prefer: 'resolution=merge-duplicates' },
+          body: JSON.stringify(rows)
+        });
+        if (!resp.ok) throw new Error(`entries ${resp.status}: ${await resp.text()}`);
+        return res.status(200).json({ ok: true, count: rows.length });
+      }
+
       // 일정 저장(생성/수정) — 같은 id면 갱신(upsert)
       if (b.type === 'entry') {
-        const e = b.entry || {};
-        const startMin = Number(e.start_min), endMin = Number(e.end_min);
-        const row = {
-          id: String(e.id || '').slice(0, 60),
-          date: String(e.date || ''),
-          member_id: String(e.member_id || '').slice(0, 40),
-          start_min: startMin,
-          end_min: endMin,
-          title: String(e.title || '').trim().slice(0, 60),
-          memo: String(e.memo || '').slice(0, 500)
-        };
-        if (!row.id || !DATE_RE.test(row.date) || !row.member_id || !row.title ||
-            !Number.isInteger(startMin) || !Number.isInteger(endMin) ||
-            startMin < 0 || endMin > 1440 || endMin <= startMin) {
-          return res.status(400).json({ error: 'bad-entry' });
-        }
+        const row = normalizeEntry(b.entry || {});
+        if (!row) return res.status(400).json({ error: 'bad-entry' });
         const resp = await fetch(entriesTable, {
           method: 'POST',
           headers: { ...sbHeaders(), Prefer: 'resolution=merge-duplicates' },
@@ -173,6 +199,15 @@ module.exports = async (req, res) => {
           method: 'DELETE', headers: sbHeaders()
         });
         if (!resp.ok) throw new Error(`member-del ${resp.status}: ${await resp.text()}`);
+        return res.status(200).json({ ok: true });
+      }
+      const delDate = String((req.query || {}).date || '');
+      if (delDate) {
+        if (!DATE_RE.test(delDate)) return res.status(400).json({ error: 'bad-date' });
+        const resp = await fetch(`${entriesTable}?date=eq.${encodeURIComponent(delDate)}`, {
+          method: 'DELETE', headers: sbHeaders()
+        });
+        if (!resp.ok) throw new Error(`day-del ${resp.status}: ${await resp.text()}`);
         return res.status(200).json({ ok: true });
       }
       const id = String((req.query || {}).id || '');
