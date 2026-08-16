@@ -94,7 +94,23 @@
   .board-wrap { max-width: 1360px; margin: 14px auto 60px; padding: 0 16px; }
   .board { overflow: auto; background: #fff; border: 1px solid var(--line); border-radius: 14px;
     max-height: calc(100vh - 150px); }
-  .grid { display: grid; min-width: 1150px; position: relative; }
+  .grid { display: grid; min-width: 1150px; position: relative; --slot-h: 36px; }
+  /* 좁은 화면: 가로 스크롤 없이 팀원 전체가 한 화면에 들어오도록 압축 */
+  .grid.compact { min-width: 0; --slot-h: 28px; }
+  .grid.compact .hcell { font-size: 9.5px; padding: 7px 1px; letter-spacing: -.03em; }
+  .grid.compact .hcell .csw, .grid.compact .hcell .pen { display: none; }
+  .grid.compact .hcell.corner { font-size: 9.5px; }
+  .grid.compact .hcell.addcol { font-size: 13px; }
+  .grid.compact .timecol .t { font-size: 9.5px; padding: 1px 3px 0 0; }
+  .grid.compact .timecol .t .mm { display: none; }
+  .grid.compact .timecol .t.half { font-size: 0; }
+  .grid.compact .entry { font-size: 9px; padding: 2px 3px; left: 1px; right: 1px; border-radius: 5px;
+    border-left-width: 3px; }
+  /* 좁은 열에서는 제목을 여러 줄로 흘려 최대한 보이게 */
+  .grid.compact .entry b { font-size: 9px; white-space: normal; word-break: break-all; line-height: 1.15; }
+  .grid.compact .entry .tm { display: none; }
+  .grid.compact .entry.band .who { font-size: 8.5px; padding: 0 6px; }
+  .grid.compact .lunch-band span { font-size: 9px; letter-spacing: .2em; }
   .hcell { position: sticky; top: 0; z-index: 4; background: var(--navy-2); color: #fff; font-size: 13.5px; font-weight: 700;
     padding: 10px 6px; text-align: center; border-left: 1px solid rgba(255,255,255,.14); cursor: pointer; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis; }
@@ -106,6 +122,7 @@
   .hcell.addcol:hover { color: #fff; }
   .timecol { position: sticky; left: 0; z-index: 3; background: #FBFCFD; border-right: 1px solid var(--line); }
   .timecol .t { height: var(--slot-h); font-size: 11.5px; color: var(--muted); text-align: right; padding: 2px 8px 0 0;
+    white-space: nowrap;
     border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
   .timecol .t.half { color: #B4C2CF; border-top-color: #EDF1F5; font-size: 10.5px; }
   .mcol { position: relative; border-left: 1px solid var(--line); }
@@ -165,11 +182,25 @@
   .err { color: #B14A4A; font-size: 12.5px; margin-top: 8px; display: none; }
   .err.show { display: block; }
 
+  #wideBtn { display: none; }
+  @media (max-width: 760px) {
+    #wideBtn { display: inline-block; }
+    .bar-in { padding: 8px 8px; gap: 6px; }
+    .brand .sub { display: none; }
+    .brand { font-size: 13.5px; }
+    .board-wrap, .notice, .meet-panel { padding: 0 6px; }
+    .board-wrap { margin: 8px auto 14px; }
+    .board { max-height: calc(100dvh - 132px); border-radius: 10px; }
+    .bar-in { padding: 6px 8px 4px; gap: 5px; }
+    .status { font-size: 11px; margin-top: -2px; }
+    .date-nav { margin-left: auto; gap: 4px; }
+    .date-nav .nav-btn { width: 30px; height: 30px; }
+    .date-label { padding: 5px 9px; font-size: 13px; }
+    .today-btn { padding: 5px 9px; font-size: 12px; }
+    .meet-btn { padding: 7px 10px; font-size: 12.5px; }
+  }
   @media (max-width: 640px) {
-    .bar-in { padding: 8px 10px; gap: 8px; }
     .brand .name { display: none; }
-    .board-wrap, .notice, .meet-panel { padding: 0 8px; }
-    .date-nav { margin-left: 0; }
   }
 </style>
 </head>
@@ -190,6 +221,7 @@
       <button class="nav-btn" id="nextDay" title="다음 날">▶</button>
       <button class="today-btn" id="todayBtn">오늘</button>
     </div>
+    <button class="today-btn" id="wideBtn" title="넓게 보기 / 한 화면에 보기">↔ 넓게</button>
     <button class="today-btn" id="installBtn" style="display:none" title="홈 화면에 앱으로 추가">📲 앱 설치</button>
     <button class="meet-btn" id="allAddBtn" style="background:var(--brass)" title="모든 팀원에게 같은 일정을 한 번에 등록">📌 전체 일정 추가</button>
     <button class="meet-btn" id="meetToggle">🕐 회의 시간 찾기</button>
@@ -278,7 +310,9 @@
   'use strict';
 
   // ── 시간 상수: 06:00 ~ 22:00, 30분 단위 ──
-  var DAY_START = 6 * 60, DAY_END = 22 * 60, STEP = 30, SLOT_H = 36;
+  var DAY_START = 6 * 60, DAY_END = 22 * 60, STEP = 30;
+  var SLOT_H = 36;              // 한 칸(30분) 높이 — 좁은 화면에서는 28px로 줄어든다
+  var COMPACT_W = 760;          // 이 폭 이하이면 '한 화면에 보기'
   var SLOTS = (DAY_END - DAY_START) / STEP;
   var LUNCH_S = 12 * 60, LUNCH_E = 13 * 60;
   var API = '/api/schedule';
@@ -291,6 +325,8 @@
     mode: null,            // 'server' | 'local'
     meetOpen: false,
     meetSel: {},           // member_id -> bool
+    wide: localStorage.getItem('mlk-sched-wide') === '1', // 좁은 화면에서 넓게 보기
+    cachedAt: null,
     freeWindows: []
   };
   var editingGroup = null; // 수정 중인 일정(공통 일정이면 여러 건)
@@ -601,9 +637,13 @@
 
   function renderBoard() {
     var members = state.members;
+    var compact = isCompact();
+    SLOT_H = compact ? 28 : 36;
     var grid = document.createElement('div');
-    grid.className = 'grid';
-    grid.style.gridTemplateColumns = '58px repeat(' + members.length + ', minmax(112px, 1fr)) 44px';
+    grid.className = 'grid' + (compact ? ' compact' : '');
+    grid.style.gridTemplateColumns = compact
+      ? '30px repeat(' + members.length + ', minmax(0, 1fr)) 22px'
+      : '58px repeat(' + members.length + ', minmax(112px, 1fr)) 44px';
 
     // 헤더
     var corner = document.createElement('div');
@@ -615,6 +655,7 @@
       h.className = 'hcell';
       h.title = '이름 변경';
       h.innerHTML = '<span class="csw" style="background:' + esc(m.color || '#C7B48E') + '"></span>' + esc(m.name) + '<span class="pen">✎</span>';
+      h.style.borderBottom = '3px solid ' + (m.color || '#C7B48E');
       h.addEventListener('click', function () { openNameModal(m); });
       grid.appendChild(h);
     });
@@ -632,7 +673,8 @@
       var min = DAY_START + s * STEP;
       var t = document.createElement('div');
       t.className = 't' + (min % 60 ? ' half' : '');
-      t.textContent = fmtMin(min);
+      t.innerHTML = '<span class="hh">' + String(Math.floor(min / 60)).padStart(2, '0') +
+        '</span><span class="mm">:' + String(min % 60).padStart(2, '0') + '</span>';
       tc.appendChild(t);
     }
     grid.appendChild(tc);
@@ -712,9 +754,17 @@
     board.appendChild(grid);
     renderBands(grid, bands); // 열 위치를 재야 하므로 화면에 붙인 뒤에 그린다
     board.scrollLeft = sx; board.scrollTop = sy;
+    // 처음 열었을 때는 지금 시각이 보이는 위치에서 시작
+    if (!scrolledToNow && state.date === todayStr()) {
+      scrolledToNow = true;
+      var now = new Date(), nm = now.getHours() * 60 + now.getMinutes();
+      if (nm > DAY_START + 60) board.scrollTop = Math.max(0, minToY(nm) - SLOT_H * 2);
+    }
   }
+  var scrolledToNow = false;
 
   function minToY(min) { return (min - DAY_START) / STEP * SLOT_H; }
+  function isCompact() { return window.innerWidth <= COMPACT_W && !state.wide; }
 
   // 같은 제목·시간·메모로 여러 명에게 등록된 일정 = 하나의 공통 일정으로 본다
   function groupKey(e) { return [e.title, e.start_min, e.end_min, e.memo || ''].join(''); }
@@ -1165,6 +1215,30 @@
     for (var m2 = DAY_START + 60; m2 <= DAY_END; m2 += 60) t.add(new Option(fmtMin(m2), m2));
     f.value = 9 * 60; t.value = 18 * 60;
   })();
+
+  // 좁은 화면에서 '한 화면에 보기' ↔ '넓게 보기' 전환
+  function syncWideBtn() {
+    el('wideBtn').textContent = state.wide ? '⤢ 한 화면' : '↔ 넓게';
+    el('wideBtn').title = state.wide
+      ? '팀원 전체가 한 화면에 들어오도록 줄이기'
+      : '글씨를 키워 넓게 보기 (가로로 넘겨서 확인)';
+  }
+  el('wideBtn').addEventListener('click', function () {
+    state.wide = !state.wide;
+    localStorage.setItem('mlk-sched-wide', state.wide ? '1' : '0');
+    syncWideBtn();
+    renderBoard();
+  });
+  syncWideBtn();
+
+  // 화면 회전·크기 변경 시 다시 계산
+  var resizeTimer = null, lastW = window.innerWidth;
+  window.addEventListener('resize', function () {
+    if (window.innerWidth === lastW) return;
+    lastW = window.innerWidth;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(renderBoard, 150);
+  });
 
   // ── 앱으로 설치(PWA) ──
   function isStandalone() {
