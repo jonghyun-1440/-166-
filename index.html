@@ -259,6 +259,7 @@
       <button class="nav-btn" id="nextDay" title="다음 날">▶</button>
       <button class="today-btn" id="todayBtn">오늘</button>
     </div>
+    <button class="today-btn" id="copyBtn" title="오늘 일정표를 이미지로 복사해 카톡·텔레그램에 붙여넣기">📷 복사</button>
     <button class="today-btn" id="xlBtn" title="엑셀로 내려받기 / 엑셀로 일정 올리기">📊 엑셀</button>
     <button class="today-btn" id="wideBtn" title="넓게 보기 / 한 화면에 보기">↔ 넓게</button>
     <button class="today-btn" id="installBtn" style="display:none" title="홈 화면에 앱으로 추가">📲 앱 설치</button>
@@ -1355,9 +1356,19 @@
     });
   }
 
+  // 안내 말풍선
+  function showToast(html, ms) {
+    var t = document.createElement('div');
+    t.className = 'hint-toast';
+    t.innerHTML = html;
+    document.body.appendChild(t);
+    setTimeout(function () { t.classList.add('out'); }, ms || 2800);
+    setTimeout(function () { t.remove(); }, (ms || 2800) + 500);
+  }
+
   // 파일 이름을 확실히 붙여서 내려받기
-  function saveFile(data, filename) {
-    var blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  function saveFile(data, filename, mime) {
+    var blob = new Blob([data], { type: mime || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url; a.download = filename; a.style.display = 'none';
@@ -1629,6 +1640,240 @@
     btn.disabled = false;
     if (pendingUpload) btn.textContent = pendingUpload.rows.length + '건 등록하기';
   }
+
+  // ══ 하루 일정표를 이미지로 만들어 복사/공유 ══════════════════
+  function rr(ctx, x, y, w, h, r) { // 둥근 사각형 경로
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function ellipsize(ctx, text, maxW) {
+    if (ctx.measureText(text).width <= maxW) return text;
+    while (text.length > 1 && ctx.measureText(text + '…').width > maxW) text = text.slice(0, -1);
+    return text + '…';
+  }
+
+  function makeDayImage() {
+    var members = state.members;
+    var entries = state.entries;
+    var FONT = '-apple-system, "Noto Sans KR", "Malgun Gothic", sans-serif';
+
+    // 시간 범위: 기본 09~18시, 일정이 벗어나면 그만큼 넓힌다
+    var from = 9 * 60, to = 18 * 60;
+    entries.forEach(function (e) {
+      from = Math.min(from, Math.floor(e.start_min / 60) * 60);
+      to = Math.max(to, Math.ceil(e.end_min / 60) * 60);
+    });
+    from = Math.max(DAY_START, from); to = Math.min(DAY_END, to);
+
+    var S = 2; // 해상도 배율(선명하게)
+    var pad = 20, timeW = 50, headH = 42, titleH = 58, footH = 30, slotH = 27;
+    var colW = Math.max(112, Math.min(148, Math.round(1080 / Math.max(members.length, 1))));
+    var slots = (to - from) / STEP;
+    var W = pad * 2 + timeW + colW * members.length;
+    var H = pad + titleH + headH + slots * slotH + footH + pad * 0.5;
+    var cv = document.createElement('canvas');
+    cv.width = W * S; cv.height = H * S;
+    var ctx = cv.getContext('2d');
+    ctx.scale(S, S);
+    var gx = pad + timeW;                       // 표 왼쪽
+    var gy = pad + titleH + headH;              // 표(시간칸) 위쪽
+    var gw = colW * members.length;
+    var yOf = function (min) { return gy + (min - from) / STEP * slotH; };
+
+    // 바탕 + 제목
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#C7B48E';
+    ctx.fillRect(0, 0, W, 4);
+    var p = state.date.split('-');
+    ctx.fillStyle = '#1E3A50';
+    ctx.font = '900 21px ' + FONT;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(p[0] + '년 ' + Number(p[1]) + '월 ' + Number(p[2]) + '일 (' + dowKo(state.date) + ') 팀 일정',
+      pad, pad + 24);
+    ctx.font = '500 12px ' + FONT;
+    ctx.fillStyle = '#A9884F';
+    ctx.textAlign = 'right';
+    ctx.fillText('팀 일정 공유 · Daily Timetable', W - pad, pad + 24);
+    ctx.textAlign = 'left';
+
+    // 머리글 (이름 줄)
+    ctx.fillStyle = '#2A4A6B';
+    rr(ctx, pad, pad + titleH, timeW + gw, headH, 10);
+    ctx.fill();
+    ctx.fillStyle = '#1F3A55';
+    rr(ctx, pad, pad + titleH, timeW, headH, 10);
+    ctx.fill();
+    ctx.fillRect(pad + 10, pad + titleH, timeW - 10, headH); // 모서리 정리
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '700 12px ' + FONT;
+    ctx.textAlign = 'center';
+    ctx.fillText('시간', pad + timeW / 2, pad + titleH + headH / 2);
+    members.forEach(function (m, i) {
+      var cx = gx + colW * i + colW / 2;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '700 13px ' + FONT;
+      ctx.fillText(ellipsize(ctx, m.name, colW - 14), cx, pad + titleH + headH / 2 - 2);
+      ctx.fillStyle = m.color || '#C7B48E';
+      ctx.fillRect(gx + colW * i + 6, pad + titleH + headH - 5, colW - 12, 3);
+    });
+
+    // 점심 배경
+    if (LUNCH_S < to && LUNCH_E > from) {
+      var ls = Math.max(LUNCH_S, from), le = Math.min(LUNCH_E, to);
+      ctx.fillStyle = '#FAF7F0';
+      ctx.fillRect(gx, yOf(ls), gw, yOf(le) - yOf(ls));
+      ctx.fillStyle = '#C9B78C';
+      ctx.font = '700 11px ' + FONT;
+      ctx.fillText('점 심', gx + gw / 2, (yOf(ls) + yOf(le)) / 2);
+    }
+
+    // 눈금
+    for (var min = from; min <= to; min += STEP) {
+      var yy = yOf(min);
+      ctx.strokeStyle = (min % 60 === 0) ? '#DCE4EC' : '#EDF1F5';
+      ctx.beginPath(); ctx.moveTo(gx, yy); ctx.lineTo(gx + gw, yy); ctx.stroke();
+      if (min % 60 === 0 && min < to) {
+        ctx.fillStyle = '#4E6076';
+        ctx.font = '600 11px ' + FONT;
+        ctx.textAlign = 'right';
+        ctx.fillText(fmtMin(min), pad + timeW - 8, yy + 9);
+        ctx.textAlign = 'center';
+      }
+    }
+    for (var c = 0; c <= members.length; c++) {
+      ctx.strokeStyle = '#DCE4EC';
+      ctx.beginPath(); ctx.moveTo(gx + colW * c, gy); ctx.lineTo(gx + colW * c, yOf(to)); ctx.stroke();
+    }
+    ctx.strokeStyle = '#DCE4EC';
+    ctx.beginPath(); ctx.moveTo(pad, yOf(to)); ctx.lineTo(gx + gw, yOf(to)); ctx.stroke();
+
+    // 일정 블록 하나 그리기
+    function drawBlock(x, w, sMin, eMin, color, title, timeText, badge) {
+      var y1 = yOf(Math.max(sMin, from)), y2 = yOf(Math.min(eMin, to));
+      if (y2 - y1 < 8) return;
+      ctx.save();
+      rr(ctx, x, y1 + 1.5, w, y2 - y1 - 3, 6);
+      ctx.fillStyle = '#FFFFFF'; ctx.fill();
+      ctx.fillStyle = hexToRgba(color, .14); ctx.fill();
+      ctx.strokeStyle = hexToRgba(color, .45); ctx.stroke();
+      ctx.clip();
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y1 + 1.5, 3.5, y2 - y1 - 3);
+      ctx.fillStyle = '#243B50';
+      ctx.textAlign = 'left';
+      ctx.font = '700 12px ' + FONT;
+      var textW = w - 14 - (badge ? ctx.measureText(badge).width + 30 : 0);
+      var tall = (y2 - y1) >= 34;
+      ctx.fillText(ellipsize(ctx, title, textW), x + 9, y1 + (tall ? 12 : (y2 - y1) / 2 + 1));
+      if (tall) {
+        ctx.font = '500 10px ' + FONT;
+        ctx.fillStyle = 'rgba(36,59,80,.62)';
+        ctx.fillText(ellipsize(ctx, timeText, w - 14), x + 9, y1 + 26);
+      }
+      if (badge) {
+        ctx.font = '700 10px ' + FONT;
+        var bw = ctx.measureText(badge).width + 14;
+        ctx.fillStyle = 'rgba(42,74,107,.78)';
+        rr(ctx, x + w - bw - 7, y1 + (y2 - y1) / 2 - 8, bw, 16, 8);
+        ctx.fill();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textAlign = 'center';
+        ctx.fillText(badge, x + w - bw / 2 - 7, y1 + (y2 - y1) / 2 + 1);
+        ctx.textAlign = 'left';
+      }
+      ctx.restore();
+    }
+
+    // 공통 일정(막대) + 개인 일정 — 화면과 같은 규칙으로
+    var bands = groupBands(members);
+    var inBand = {};
+    bands.forEach(function (b) { b.group.forEach(function (e) { inBand[e.id] = true; }); });
+    members.forEach(function (m, i) {
+      var list = entries.filter(function (e) { return e.member_id === m.id && !inBand[e.id]; });
+      layoutOverlaps(list).forEach(function (pl) {
+        var w = (colW - 8) / pl.of;
+        drawBlock(gx + colW * i + 4 + w * pl.lane, w - (pl.of > 1 ? 2 : 0),
+          pl.e.start_min, pl.e.end_min, m.color || '#3E6288',
+          pl.e.title, fmtMin(pl.e.start_min) + '~' + fmtMin(pl.e.end_min), null);
+      });
+    });
+    bands.forEach(function (b) {
+      var e = b.group[0];
+      var whole = b.group.length === members.length;
+      drawBlock(gx + colW * b.from + 4, colW * (b.to - b.from + 1) - 8,
+        e.start_min, e.end_min, '#2A4A6B', e.title,
+        fmtMin(e.start_min) + '~' + fmtMin(e.end_min), whole ? '전원' : b.group.length + '명');
+    });
+
+    // 하단 표기
+    ctx.fillStyle = '#8CA0B3';
+    ctx.font = '500 10.5px ' + FONT;
+    ctx.textAlign = 'right';
+    var now = new Date();
+    ctx.fillText(location.host + ' · ' + String(now.getHours()).padStart(2, '0') + ':' +
+      String(now.getMinutes()).padStart(2, '0') + ' 기준', W - pad, H - 16);
+    ctx.textAlign = 'left';
+    return cv;
+  }
+
+  async function copyDayImage() {
+    var btn = el('copyBtn');
+    btn.disabled = true;
+    var oldText = btn.textContent;
+    btn.textContent = '만드는 중…';
+    try {
+      var cv = makeDayImage();
+      var blobPromise = new Promise(function (res, rej) {
+        cv.toBlob(function (b) { b ? res(b) : rej(new Error('blob')); }, 'image/png');
+      });
+      var fname = 'schedule_' + state.date + '.png';
+
+      // 휴대폰: 공유 시트에서 카톡·텔레그램을 바로 고를 수 있게
+      if (document.body.classList.contains('touch') && navigator.canShare) {
+        var blob = await blobPromise;
+        var file = new File([blob], fname, { type: 'image/png' });
+        if (navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: '팀 일정 ' + state.date });
+            btn.disabled = false; btn.textContent = oldText;
+            return;
+          } catch (shareErr) {
+            if (shareErr && shareErr.name === 'AbortError') { // 사용자가 닫음
+              btn.disabled = false; btn.textContent = oldText;
+              return;
+            } // 그 외 실패 → 아래 클립보드로
+          }
+        }
+      }
+
+      // PC(또는 공유 불가): 클립보드에 이미지 복사
+      if (navigator.clipboard && window.ClipboardItem) {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
+        showToast('📋 일정표 이미지가 복사되었습니다.<br>카톡·텔레그램 채팅창에 <b>붙여넣기(Ctrl+V)</b> 하세요.');
+      } else {
+        saveFile(await blobPromise, fname, 'image/png'); // 마지막 수단: 파일로 저장
+        showToast('이미지 파일로 저장했습니다.<br>저장된 사진을 공유해 주세요.');
+      }
+    } catch (ex) {
+      try {
+        saveFile(await new Promise(function (res) { makeDayImage().toBlob(res, 'image/png'); }),
+          'schedule_' + state.date + '.png', 'image/png');
+        showToast('복사 대신 이미지 파일로 저장했습니다.<br>저장된 사진을 공유해 주세요.');
+      } catch (ex2) {
+        alert('이미지를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.');
+      }
+    }
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
+  el('copyBtn').addEventListener('click', copyDayImage);
 
   el('xlBtn').addEventListener('click', openXlModal);
   el('xlClose').addEventListener('click', function () { el('xlModalBg').classList.remove('open'); });
