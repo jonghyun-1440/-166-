@@ -1,8 +1,25 @@
 # 팀 일정 공유 — 하루 타임테이블
 
-9명이 함께 쓰는 하루 일정 공유 사이트입니다.
+팀원들이 함께 쓰는 하루 일정 공유 사이트입니다.
 06:00~22:00을 30분 단위로 나눈 표에 각자 일정을 등록해 서로 보고,
 "회의 시간 찾기"로 모두가 비는 시간에 전원의 회의를 한 번에 잡습니다.
+팀원 추가/제거, 전체 공통 일정, 드래그로 시간 조절, 엑셀 내려받기/올리기,
+일정표 이미지 복사(카톡·텔레그램 공유), 홈 화면 앱 설치(PWA)까지 지원합니다.
+
+## 우리 팀에서도 그대로 쓰기 (다른 회사/팀 셋업)
+
+이 프로그램은 누구나 **자기 서버(무료)로 똑같이** 운영할 수 있습니다.
+데이터는 각자의 서버에 저장되므로 팀끼리 섞이지 않습니다.
+
+**가장 쉬운 방법 — 아래 버튼 한 번:**
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fjonghyun-1440%2F-166-&project-name=team-schedule&repository-name=team-schedule&env=SUPABASE_URL,SUPABASE_SERVICE_KEY&envDescription=Supabase%20%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%EC%9D%98%20Project%20URL%EA%B3%BC%20Secret%20Key%EB%A5%BC%20%EC%9E%85%EB%A0%A5%ED%95%98%EC%84%B8%EC%9A%94)
+
+1. 먼저 [supabase.com](https://supabase.com)에서 무료 프로젝트를 만들고, 아래 "2단계"의 SQL을 실행한 뒤 `Project URL`과 `Secret key`를 복사해 둡니다.
+2. 위 **Deploy** 버튼을 누르면 이 저장소가 본인 GitHub 계정으로 복사되면서 Vercel 배포가 시작되고, 그 과정에서 두 값을 붙여넣는 칸이 나옵니다.
+3. 배포가 끝나면 나온 주소를 팀원들에게 공유하면 끝입니다. 팀원 이름은 사이트에서 직접 바꿉니다.
+
+버튼 없이 하려면: 이 저장소를 **Fork**(또는 Use this template) → 아래 1·2단계를 순서대로 진행하면 됩니다.
 
 ## 처음 공개하기 (약 10분)
 
