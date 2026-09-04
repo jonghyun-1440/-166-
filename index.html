@@ -385,8 +385,8 @@
 (function () {
   'use strict';
 
-  // ── 시간 상수: 06:00 ~ 22:00, 30분 단위 ──
-  var DAY_START = 6 * 60, DAY_END = 22 * 60, STEP = 30;
+  // ── 시간 상수: 06:00 ~ 24:00(자정), 30분 단위 ──
+  var DAY_START = 6 * 60, DAY_END = 24 * 60, STEP = 30;
   var SLOT_H = 36;              // 한 칸(30분) 높이 — 좁은 화면에서는 28px로 줄어든다
   var COMPACT_W = 760;          // 이 폭 이하이면 '한 화면에 보기'
   var SLOTS = (DAY_END - DAY_START) / STEP;
@@ -1498,7 +1498,7 @@
         ['3. 이름: 아래 팀원 명단과 똑같이 적어 주세요.'],
         ['4. 시작 / 종료: 09:00, 14:30 처럼 적습니다. (오전 9시, 9시 30분 도 인식합니다)'],
         ['5. 일정: 표에 표시될 제목입니다. 메모는 비워도 됩니다.'],
-        ['6. 화면에 보이는 시간대는 06:00~22:00 입니다.'], [''],
+        ['6. 화면에 보이는 시간대는 06:00~24:00 입니다.'], [''],
         ['※ 여러 사람이 함께하는 일정은 사람마다 한 줄씩 적으면 한 줄 막대로 합쳐집니다.'], [''],
         ['[ 팀원 명단 ]']];
       members.forEach(function (m) { help.push([m.name]); });
@@ -1575,7 +1575,7 @@
       var html = '<div class="sum">등록할 일정 <b>' + ok.length + '건</b>' +
         (dateList.length ? ' · 날짜 <b>' + dateList[0] + (dateList.length > 1 ? ' ~ ' + dateList[dateList.length - 1] : '') + '</b>' : '') +
         (newNames.length ? '<br>명단에 없는 이름: <b>' + newNames.map(esc).join(', ') + '</b>' : '') + '</div>';
-      if (outside) html += '<div class="warn">' + outside + '건은 화면 표시 범위(06:00~22:00) 밖이라 표에 보이지 않을 수 있습니다.</div>';
+      if (outside) html += '<div class="warn">' + outside + '건은 화면 표시 범위(06:00~24:00) 밖이라 표에 보이지 않을 수 있습니다.</div>';
       if (bad.length) html += '<div class="bad"><b>확인이 필요한 줄 ' + bad.length + '개</b><br>' +
         bad.slice(0, 20).map(esc).join('<br>') + (bad.length > 20 ? '<br>…' : '') + '</div>';
       box.innerHTML = html;

@@ -2,7 +2,7 @@
 // 화면(앱 껍데기)은 캐시해 두어 오프라인에서도 열리게 하고,
 // 일정 데이터(/api/)는 항상 서버에서 새로 받아온다.
 
-var CACHE = 'team-schedule-v1';
+var CACHE = 'team-schedule-v2';
 var SHELL = [
   '/',
   '/index.html',
