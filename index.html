@@ -264,6 +264,7 @@
     <button class="today-btn" id="wideBtn" title="넓게 보기 / 한 화면에 보기">↔ 넓게</button>
     <button class="today-btn" id="installBtn" style="display:none" title="홈 화면에 앱으로 추가">📲 앱 설치</button>
     <button class="meet-btn" id="allAddBtn" style="background:var(--brass)" title="모든 팀원에게 같은 일정을 한 번에 등록">📌 전체 일정 추가</button>
+    <button class="meet-btn" id="recurBtn" title="매주 같은 요일에 자동으로 들어가는 일정을 관리">🔁 반복 일정</button>
     <button class="meet-btn" id="meetToggle">🕐 회의 시간 찾기</button>
     <div class="status" id="status"><span class="dot"></span>연결 확인 중…</div>
   </div>
@@ -326,6 +327,41 @@
       <button class="btn danger" id="fDelete" style="display:none">삭제</button>
       <button class="btn" id="fCancel">취소</button>
       <button class="btn primary" id="fSave">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 반복 일정 모달 -->
+<div class="modal-bg" id="recurModalBg">
+  <div class="modal" style="max-width: 560px">
+    <h3>🔁 매주 반복 일정</h3>
+    <div class="xl-help">고른 요일마다 표에 자동으로 나타납니다. 드래그로 옮길 수 없고, 여기서 추가하고 삭제합니다.</div>
+    <div class="f-row">
+      <label class="t">제목</label>
+      <input type="text" id="rTitle" maxlength="60" placeholder="예: 오전수업, 저녁수업" />
+    </div>
+    <div class="f-row">
+      <label class="t">요일 (여러 개 선택)</label>
+      <div class="mem-list" id="rDows"></div>
+    </div>
+    <div class="f-row">
+      <label class="t">시간</label>
+      <div class="time-pair">
+        <select id="rStart"></select><span>~</span><select id="rEnd"></select>
+      </div>
+    </div>
+    <div class="f-row">
+      <label class="t">대상</label>
+      <select id="rWho" style="width:100%"></select>
+    </div>
+    <div class="err" id="rErr"></div>
+    <div class="btns">
+      <button class="btn" id="rClose">닫기</button>
+      <button class="btn primary" id="rSave">반복 일정 추가</button>
+    </div>
+    <div class="xl-sec">
+      <div class="xl-t">등록된 반복 일정</div>
+      <div id="rList" class="xl-help">불러오는 중…</div>
     </div>
   </div>
 </div>
@@ -398,6 +434,7 @@
     date: todayStr(),
     members: [],
     entries: [],
+    recur: [],             // 오늘 요일의 매주 반복 일정 (1900년 첫 주 날짜에 저장된 규칙)
     mode: null,            // 'server' | 'local'
     meetOpen: false,
     meetSel: {},           // member_id -> bool
@@ -425,6 +462,15 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+  // ── 매주 반복 일정 (2026-09-07) ──
+  // 규칙은 1900년 첫 주(1900-01-01이 월요일)의 일정 행으로 저장한다 — 테이블을 새로 만들지
+  // 않고 기존 entries를 그대로 쓴다. member_id '*'는 전체(모든 팀원에게 반복)라는 뜻이다.
+  var RECUR_ALL = '*';
+  var RECUR_DOW = ['월', '화', '수', '목', '금', '토', '일']; // 1900-01-0N의 N-1
+  function recurDateFor(dateStr) {
+    var g = new Date(dateStr + 'T00:00:00').getDay();
+    return '1900-01-0' + (g === 0 ? 7 : g);
+  }
   function hexToRgba(hex, a) {
     var h = (hex || '#3E6288').replace('#', '');
     var r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
@@ -457,6 +503,18 @@
     var db = localLoad();
     return (db.cache && db.cache[date]) || null;
   }
+  // 반복 규칙은 요일별 7건뿐이라 날짜 캐시와 따로 보관한다 (14일 정리에 밀려나지 않게)
+  function cacheRecur(recurDate, rows) {
+    try {
+      var db = localLoad();
+      (db.recurCache = db.recurCache || {})[recurDate] = rows;
+      localSave(db);
+    } catch (e) { /* 저장 공간이 없으면 무시 */ }
+  }
+  function cachedRecur(recurDate) {
+    var db = localLoad();
+    return (db.recurCache && db.recurCache[recurDate]) || [];
+  }
   function assertWritable() {
     if (state.mode === 'offline') throw { offline: true };
   }
@@ -475,6 +533,7 @@
     var date = state.date;
     if (state.mode !== 'local') {
       try {
+        var rq2 = fetch(API + '?date=' + recurDateFor(date)); // 이 요일의 반복 규칙도 함께
         var r = await fetch(API + '?date=' + date);
         if (!r.ok) {
           var body = null;
@@ -487,7 +546,12 @@
         state.serverErr = null;
         state.members = j.members || [];
         state.entries = j.entries || [];
+        try {
+          var r2 = await rq2;
+          state.recur = r2.ok ? ((await r2.json()).entries || []) : [];
+        } catch (eRec) { state.recur = []; }
         cacheDay(date, j.members, j.entries); // 오프라인에서 볼 수 있게 보관
+        cacheRecur(recurDateFor(date), state.recur);
         setStatus();
         render();
         maybeMigrateLocal();
@@ -506,6 +570,7 @@
           state.cachedAt = cached.at;
           state.members = cached.members || [];
           state.entries = cached.entries || [];
+          state.recur = cachedRecur(recurDateFor(date));
           setStatus();
           render();
           return;
@@ -517,6 +582,7 @@
     if (!db.members || !db.members.length) { db.members = localDefaults(); db.entries = {}; localSave(db); }
     state.members = db.members;
     state.entries = (db.entries && db.entries[date]) || [];
+    state.recur = (db.entries && db.entries[recurDateFor(date)]) || [];
     setStatus();
     render();
   }
@@ -536,15 +602,16 @@
       localSave(db);
     }
   }
-  async function deleteEntryRow(id) {
+  async function deleteEntryRow(id, date) {
     assertWritable();
     if (state.mode === 'server') {
       var r = await fetch(API + '?id=' + encodeURIComponent(id), { method: 'DELETE' });
       if (!r.ok) throw new Error('delete');
     } else {
       var db = localLoad();
-      var list = (db.entries && db.entries[state.date]) || [];
-      db.entries[state.date] = list.filter(function (x) { return x.id !== id; });
+      var d = date || state.date;
+      var list = (db.entries && db.entries[d]) || [];
+      db.entries[d] = list.filter(function (x) { return x.id !== id; });
       localSave(db);
     }
   }
@@ -799,7 +866,7 @@
       }
 
       // 일정 블록 — 서로 겹치는 것끼리만 폭을 나눠 나란히 배치
-      var list = state.entries.filter(function (e) { return e.member_id === m.id && !inBand[e.id]; });
+      var list = dayEntries().filter(function (e) { return e.member_id === m.id && !inBand[e.id]; });
       layoutOverlaps(list).forEach(function (p) {
         var div = makeEntryEl([p.e], m.color || '#3E6288');
         if (!div) return;
@@ -847,15 +914,34 @@
   function groupKey(e) { return [e.title, e.start_min, e.end_min, e.memo || ''].join(''); }
   function groupOf(entry) {
     var k = groupKey(entry);
-    return state.entries.filter(function (x) { return groupKey(x) === k; });
+    return dayEntries().filter(function (x) { return groupKey(x) === k; });
   }
 
+  // 반복 규칙을 오늘 표에 펼친다 — '*'(전체)는 팀원마다 하나씩 만들어 공통 막대로 묶이게 한다.
+  // 펼친 일정에는 recur(원본 규칙 id)가 붙는다 — 드래그 금지·🔁 표시·수정 안내에 쓴다.
+  function expandRecur() {
+    var out = [];
+    (state.recur || []).forEach(function (e) {
+      if (e.member_id === RECUR_ALL) {
+        state.members.forEach(function (m) {
+          out.push(Object.assign({}, e, { id: e.id + '@' + m.id, member_id: m.id, recur: e.id }));
+        });
+      } else if (state.members.some(function (m) { return m.id === e.member_id; })) {
+        out.push(Object.assign({}, e, { recur: e.id }));
+      }
+    });
+    return out;
+  }
+  // 화면·이미지·비는시간이 함께 보는 "오늘 일정 전부" = 날짜 일정 + 반복 일정
+  function dayEntries() { return state.entries.concat(expandRecur()); }
+
   // 공통 일정 중 열이 이어져 있는 구간을 가로 막대(band)로 만든다
-  function groupBands(members) {
+  function groupBands(members, list) {
+    list = list || dayEntries();
     var idxOf = {};
     members.forEach(function (m, i) { idxOf[m.id] = i; });
     var groups = {};
-    state.entries.forEach(function (e) {
+    list.forEach(function (e) {
       if (!(e.member_id in idxOf)) return;
       (groups[groupKey(e)] = groups[groupKey(e)] || []).push(e);
     });
@@ -942,13 +1028,14 @@
     div.style.borderColor = hexToRgba(color, .35);
     div.style.borderLeft = '4px solid ' + color;
     div.style.color = '#243B50';
-    div.innerHTML = '<div class="rz rz-top"></div><b>' + esc(e.title) + '</b><span class="tm">' +
+    div.innerHTML = '<div class="rz rz-top"></div><b>' + (e.recur ? '🔁 ' : '') + esc(e.title) + '</b><span class="tm">' +
       fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + '</span>' +
       (whoLabel ? '<span class="who">' + esc(whoLabel) + '</span>' : '') +
       '<div class="rz rz-bot"></div>';
     div.title = e.title + (e.memo ? '\n' + e.memo : '') +
       (whoLabel ? '\n함께: ' + group.map(function (x) { return memberName(x.member_id); }).join(', ') : '') +
-      '\n(드래그: 이동 · 가장자리: 시간 조절)';
+      (e.recur ? '\n매주 반복 일정 — 🔁 반복 일정에서 수정/삭제합니다'
+               : '\n(드래그: 이동 · 가장자리: 시간 조절)');
     div.addEventListener('pointerdown', function (ev) { startEntryDrag(ev, group, div); });
     return div;
   }
@@ -972,6 +1059,13 @@
     if (ev.button !== undefined && ev.button !== 0) return; // 마우스 왼쪽 버튼만
     var touch = ev.pointerType === 'touch' || ev.pointerType === 'pen';
     var entry = group[0];
+    if (entry.recur) {
+      // 반복 일정은 날짜별로 끌어 옮길 수 없다 — 규칙 자체는 반복 일정 창에서 고친다
+      ev.stopPropagation();
+      var upOnce = function () { div.removeEventListener('pointerup', upOnce); openRecurModal(); };
+      div.addEventListener('pointerup', upOnce);
+      return;
+    }
     var mode = ev.target.classList.contains('rz-top') ? 'top' :
                ev.target.classList.contains('rz-bot') ? 'bot' : 'move';
     var startY = ev.clientY;
@@ -1105,7 +1199,7 @@
     if (el('meetSkipLunch').checked) {
       for (var li = (LUNCH_S - DAY_START) / STEP; li < (LUNCH_E - DAY_START) / STEP; li++) busy[li] = true;
     }
-    state.entries.forEach(function (e) {
+    dayEntries().forEach(function (e) {
       if (sel.indexOf(e.member_id) === -1) return;
       var s = Math.max(e.start_min, DAY_START), en = Math.min(e.end_min, DAY_END);
       for (var i = Math.floor((s - DAY_START) / STEP); i < Math.ceil((en - DAY_START) / STEP); i++) {
@@ -1271,6 +1365,124 @@
     setTimeout(function () { el('nName').focus(); }, 50);
   }
 
+  // ── 매주 반복 일정 관리 ──
+  function openRecurModal() {
+    var wrap = el('rDows');
+    wrap.innerHTML = '';
+    RECUR_DOW.forEach(function (d, i) {
+      var lb = document.createElement('label');
+      lb.className = 'chip';
+      lb.innerHTML = '<input type="checkbox" value="' + (i + 1) + '" />' + d;
+      wrap.appendChild(lb);
+    });
+    fillTimeSelects(el('rStart'), el('rEnd'), 10 * 60 + 30, 12 * 60);
+    var who = el('rWho');
+    who.innerHTML = '';
+    who.add(new Option('전체 (모든 팀원)', RECUR_ALL));
+    state.members.forEach(function (m) { who.add(new Option(m.name, m.id)); });
+    el('rTitle').value = '';
+    el('rErr').className = 'err';
+    el('recurModalBg').classList.add('open');
+    renderRecurList();
+  }
+  function closeRecurModal() { el('recurModalBg').classList.remove('open'); }
+
+  // 규칙 전부 읽기 — 요일별 7개 날짜를 한 번에
+  async function fetchAllRecur() {
+    if (state.mode === 'server') {
+      var reqs = [1, 2, 3, 4, 5, 6, 7].map(function (n) {
+        return fetch(API + '?date=1900-01-0' + n)
+          .then(function (r) { return r.ok ? r.json() : { entries: [] }; })
+          .catch(function () { return { entries: [] }; });
+      });
+      var out = [];
+      (await Promise.all(reqs)).forEach(function (j, i) {
+        (j.entries || []).forEach(function (e) { e.date = '1900-01-0' + (i + 1); out.push(e); });
+      });
+      return out;
+    }
+    var db = localLoad(), out2 = [];
+    [1, 2, 3, 4, 5, 6, 7].forEach(function (n) {
+      (((db.entries || {})['1900-01-0' + n]) || []).forEach(function (e) {
+        e.date = '1900-01-0' + n; out2.push(e);
+      });
+    });
+    return out2;
+  }
+
+  async function renderRecurList() {
+    var box = el('rList');
+    box.textContent = '불러오는 중…';
+    var rows;
+    try { rows = await fetchAllRecur(); }
+    catch (e) { box.textContent = '반복 일정을 불러오지 못했습니다.'; return; }
+    if (!rows.length) { box.textContent = '등록된 반복 일정이 없습니다.'; return; }
+    // 같은 제목·시간·대상 = 하나의 규칙으로 묶어 요일을 모아 보여준다
+    var byRule = {};
+    rows.forEach(function (e) {
+      var k = [e.title, e.start_min, e.end_min, e.member_id].join('|');
+      (byRule[k] = byRule[k] || []).push(e);
+    });
+    box.innerHTML = '';
+    Object.keys(byRule).sort().forEach(function (k) {
+      var g = byRule[k].sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+      var e = g[0];
+      var dows = g.map(function (x) { return RECUR_DOW[Number(x.date.slice(-1)) - 1]; }).join('·');
+      var who = e.member_id === RECUR_ALL ? '전체' : memberName(e.member_id);
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(0,0,0,.06)';
+      row.innerHTML = '<span style="flex:1;min-width:0"><b>' + esc(dows) + '</b> ' +
+        fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + ' · ' + esc(e.title) +
+        ' <span style="opacity:.65">(' + esc(who) + ')</span></span>';
+      var del = document.createElement('button');
+      del.className = 'btn danger';
+      del.style.cssText = 'padding:4px 10px;font-size:12px';
+      del.textContent = '삭제';
+      del.addEventListener('click', async function () {
+        if (!confirm('「' + e.title + '」 반복 일정을 삭제할까요?\n(' + dows + ' ' +
+          fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + ')')) return;
+        del.disabled = true;
+        try {
+          for (var i = 0; i < g.length; i++) await deleteEntryRow(g[i].id, g[i].date);
+          await loadDay(true);
+          renderRecurList();
+        } catch (ex) {
+          alert(writeErrMsg(ex, '삭제하지 못했습니다. 다시 시도해 주세요.'));
+          del.disabled = false;
+        }
+      });
+      row.appendChild(del);
+      box.appendChild(row);
+    });
+  }
+
+  async function submitRecur() {
+    var title = el('rTitle').value.trim();
+    var sMin = Number(el('rStart').value), eMin = Number(el('rEnd').value);
+    var dows = Array.prototype.slice.call(document.querySelectorAll('#rDows input:checked'))
+      .map(function (c) { return Number(c.value); });
+    var err = el('rErr');
+    if (!title) { err.textContent = '제목을 입력해 주세요.'; err.className = 'err show'; return; }
+    if (!dows.length) { err.textContent = '요일을 하나 이상 선택해 주세요.'; err.className = 'err show'; return; }
+    if (eMin <= sMin) { err.textContent = '끝나는 시간이 시작 시간보다 늦어야 합니다.'; err.className = 'err show'; return; }
+    err.className = 'err';
+    var btn = el('rSave');
+    btn.disabled = true; btn.textContent = '저장 중…';
+    try {
+      for (var i = 0; i < dows.length; i++) {
+        await saveEntryRow({ id: 'r' + uid() + dows[i], date: '1900-01-0' + dows[i],
+          member_id: el('rWho').value, start_min: sMin, end_min: eMin, title: title, memo: '' });
+      }
+      el('rTitle').value = '';
+      await loadDay(true);
+      renderRecurList();
+    } catch (ex) {
+      err.textContent = writeErrMsg(ex, '저장에 실패했습니다. 네트워크를 확인하고 다시 시도해 주세요.');
+      err.className = 'err show';
+    }
+    btn.disabled = false; btn.textContent = '반복 일정 추가';
+  }
+
   // ── 이벤트 바인딩 ──
   el('prevDay').addEventListener('click', function () { state.date = shiftDate(state.date, -1); loadDay(); });
   el('nextDay').addEventListener('click', function () { state.date = shiftDate(state.date, 1); loadDay(); });
@@ -1279,6 +1491,10 @@
     if (ev.target.value) { state.date = ev.target.value; loadDay(); }
   });
   el('allAddBtn').addEventListener('click', openAllModal);
+  el('recurBtn').addEventListener('click', openRecurModal);
+  el('rSave').addEventListener('click', submitRecur);
+  el('rClose').addEventListener('click', closeRecurModal);
+  el('recurModalBg').addEventListener('click', function (ev) { if (ev.target === ev.currentTarget) closeRecurModal(); });
   el('meetToggle').addEventListener('click', function () {
     state.meetOpen = !state.meetOpen;
     renderMeetPanel(); renderBoard();
@@ -1660,7 +1876,7 @@
 
   function makeDayImage() {
     var members = state.members;
-    var entries = state.entries;
+    var entries = dayEntries();
     var FONT = '-apple-system, "Noto Sans KR", "Malgun Gothic", sans-serif';
 
     // 시간 범위: 화면과 같은 하루 전체(06:00~24:00)를 담는다 — 일정 유무로 잘라내면
@@ -1788,7 +2004,7 @@
     }
 
     // 공통 일정(막대) + 개인 일정 — 화면과 같은 규칙으로
-    var bands = groupBands(members);
+    var bands = groupBands(members, entries);
     var inBand = {};
     bands.forEach(function (b) { b.group.forEach(function (e) { inBand[e.id] = true; }); });
     members.forEach(function (m, i) {
