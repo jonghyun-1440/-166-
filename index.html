@@ -166,6 +166,12 @@
   .lunch-band { position: absolute; left: 0; right: 0; pointer-events: none; z-index: 1; display: flex;
     align-items: center; justify-content: center; }
   .lunch-band span { font-size: 12px; letter-spacing: .5em; color: #C9B78C; font-weight: 700; padding-left: .5em; }
+  .recur-band { position: absolute; pointer-events: auto; z-index: 1; display: flex; align-items: center;
+    justify-content: center; cursor: pointer; background: rgba(233,196,106,.18);
+    border-top: 1px dashed rgba(190,150,60,.55); border-bottom: 1px dashed rgba(190,150,60,.55); }
+  .recur-band span { font-size: 12px; font-weight: 700; color: #A9821E; background: rgba(255,251,240,.78);
+    border-radius: 99px; padding: 2px 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 92%; }
+  .grid.compact .recur-band span { font-size: 10px; padding: 1px 8px; }
   .free-band { position: absolute; left: 0; right: 0; z-index: 1; background: rgba(86,160,110,.14);
     border-top: 2px dashed #7DB893; border-bottom: 2px dashed #7DB893; cursor: pointer; }
   .free-band:hover { background: rgba(86,160,110,.22); }
@@ -866,9 +872,9 @@
       }
 
       // 일정 블록 — 서로 겹치는 것끼리만 폭을 나눠 나란히 배치
-      var list = dayEntries().filter(function (e) { return e.member_id === m.id && !inBand[e.id]; });
+      var list = dayEntries().filter(function (e) { return e.member_id === m.id && !inBand[e.id] && !e.recurAll; });
       layoutOverlaps(list).forEach(function (p) {
-        var div = makeEntryEl([p.e], m.color || '#3E6288');
+        var div = makeEntryEl([p.e], p.e.recur ? '#D9A62E' : (m.color || '#3E6288'));
         if (!div) return;
         if (p.of > 1) {
           div.style.left = 'calc(' + (p.lane * 100 / p.of) + '% + 3px)';
@@ -897,6 +903,7 @@
     board.innerHTML = '';
     board.appendChild(grid);
     renderBands(grid, bands); // 열 위치를 재야 하므로 화면에 붙인 뒤에 그린다
+    renderRecurBands(grid);   // 전체 반복 일정 — 점심 같은 노란 띠
     board.scrollLeft = sx; board.scrollTop = sy;
     // 처음 열었을 때는 지금 시각이 보이는 위치에서 시작
     if (!scrolledToNow && state.date === todayStr()) {
@@ -924,7 +931,8 @@
     (state.recur || []).forEach(function (e) {
       if (e.member_id === RECUR_ALL) {
         state.members.forEach(function (m) {
-          out.push(Object.assign({}, e, { id: e.id + '@' + m.id, member_id: m.id, recur: e.id }));
+          // recurAll: 화면·캡처에서는 블록 대신 점심 같은 노란 띠로 그린다 (비는시간 계산에는 그대로 쓴다)
+          out.push(Object.assign({}, e, { id: e.id + '@' + m.id, member_id: m.id, recur: e.id, recurAll: e.id }));
         });
       } else if (state.members.some(function (m) { return m.id === e.member_id; })) {
         out.push(Object.assign({}, e, { recur: e.id }));
@@ -942,6 +950,7 @@
     members.forEach(function (m, i) { idxOf[m.id] = i; });
     var groups = {};
     list.forEach(function (e) {
+      if (e.recurAll) return; // 전체 반복은 점심처럼 노란 띠로 그린다
       if (!(e.member_id in idxOf)) return;
       (groups[groupKey(e)] = groups[groupKey(e)] || []).push(e);
     });
@@ -983,6 +992,33 @@
       div.style.left = (c1.offsetLeft + 3) + 'px';
       div.style.width = (c2.offsetLeft + c2.offsetWidth - c1.offsetLeft - 6) + 'px';
       div.style.top = (c1.offsetTop + parseFloat(div.style.top)) + 'px';
+      layer.appendChild(div);
+    });
+    grid.appendChild(layer);
+  }
+
+  // 전체('*') 반복 일정은 점심시간처럼 노란 띠로 깐다 (2026-09-07 요청) — 일정 블록과 한눈에 구분된다
+  function renderRecurBands(grid) {
+    var rules = (state.recur || []).filter(function (e) { return e.member_id === RECUR_ALL; });
+    if (!rules.length) return;
+    var cols = grid.querySelectorAll('.mcol');
+    if (!cols.length) return;
+    var c1 = cols[0], c2 = cols[cols.length - 1];
+    var layer = document.createElement('div');
+    layer.className = 'span-layer';
+    rules.forEach(function (e) {
+      var top = minToY(Math.max(e.start_min, DAY_START));
+      var bottom = minToY(Math.min(e.end_min, DAY_END));
+      if (bottom <= top) return;
+      var div = document.createElement('div');
+      div.className = 'recur-band';
+      div.style.left = c1.offsetLeft + 'px';
+      div.style.width = (c2.offsetLeft + c2.offsetWidth - c1.offsetLeft) + 'px';
+      div.style.top = (c1.offsetTop + top) + 'px';
+      div.style.height = (bottom - top) + 'px';
+      div.innerHTML = '<span>\uD83D\uDD01 ' + esc(e.title) + ' \u00B7 ' + fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + '</span>';
+      div.title = '\ub9e4\uc8fc \ubc18\ubcf5 \uc77c\uc815 \u2014 \ub204\ub974\uba74 \ubc18\ubcf5 \uc77c\uc815 \ucc3d\uc774 \uc5f4\ub9bd\ub2c8\ub2e4';
+      div.addEventListener('click', openRecurModal);
       layer.appendChild(div);
     });
     grid.appendChild(layer);
@@ -1946,6 +1982,14 @@
       ctx.fillText('점 심', gx + gw / 2, (yOf(ls) + yOf(le)) / 2);
     }
 
+    // 전체 반복 일정 — 점심처럼 노란 띠 배경
+    (state.recur || []).filter(function (e) { return e.member_id === RECUR_ALL; }).forEach(function (e) {
+      var rs = Math.max(e.start_min, from), re2 = Math.min(e.end_min, to);
+      if (re2 <= rs) return;
+      ctx.fillStyle = 'rgba(233,196,106,.18)';
+      ctx.fillRect(gx, yOf(rs), gw, yOf(re2) - yOf(rs));
+    });
+
     // 눈금
     for (var min = from; min <= to; min += STEP) {
       var yy = yOf(min);
@@ -2008,11 +2052,11 @@
     var inBand = {};
     bands.forEach(function (b) { b.group.forEach(function (e) { inBand[e.id] = true; }); });
     members.forEach(function (m, i) {
-      var list = entries.filter(function (e) { return e.member_id === m.id && !inBand[e.id]; });
+      var list = entries.filter(function (e) { return e.member_id === m.id && !inBand[e.id] && !e.recurAll; });
       layoutOverlaps(list).forEach(function (pl) {
         var w = (colW - 8) / pl.of;
         drawBlock(gx + colW * i + 4 + w * pl.lane, w - (pl.of > 1 ? 2 : 0),
-          pl.e.start_min, pl.e.end_min, m.color || '#3E6288',
+          pl.e.start_min, pl.e.end_min, pl.e.recur ? '#D9A62E' : (m.color || '#3E6288'),
           pl.e.title, fmtMin(pl.e.start_min) + '~' + fmtMin(pl.e.end_min), null);
       });
     });
@@ -2022,6 +2066,23 @@
       drawBlock(gx + colW * b.from + 4, colW * (b.to - b.from + 1) - 8,
         e.start_min, e.end_min, '#2A4A6B', e.title,
         fmtMin(e.start_min) + '~' + fmtMin(e.end_min), whole ? '전원' : b.group.length + '명');
+    });
+
+    // 전체 반복 일정 라벨 — 띠 가운데에 알약 모양으로
+    (state.recur || []).filter(function (e) { return e.member_id === RECUR_ALL; }).forEach(function (e) {
+      var rs = Math.max(e.start_min, from), re2 = Math.min(e.end_min, to);
+      if (re2 <= rs) return;
+      ctx.font = '700 11px ' + FONT;
+      var label = '\ub9e4\uc8fc \u00B7 ' + e.title + ' ' + fmtMin(e.start_min) + '~' + fmtMin(e.end_min);
+      var lw = ctx.measureText(label).width + 20;
+      var ly = (yOf(rs) + yOf(re2)) / 2;
+      ctx.fillStyle = 'rgba(255,251,240,.88)';
+      rr(ctx, gx + gw / 2 - lw / 2, ly - 9, lw, 18, 9);
+      ctx.fill();
+      ctx.fillStyle = '#A9821E';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, gx + gw / 2, ly + 1);
+      ctx.textAlign = 'left';
     });
 
     // 하단 표기
