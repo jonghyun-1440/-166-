@@ -110,7 +110,6 @@
   .grid.compact .entry b { font-size: 9px; white-space: normal; word-break: break-all; line-height: 1.15; }
   .grid.compact .entry .tm { display: none; }
   .grid.compact .entry.band .who { font-size: 8.5px; padding: 0 6px; }
-  .grid.compact .lunch-band span { font-size: 9px; letter-spacing: .2em; }
   .hcell { position: sticky; top: 0; z-index: 4; background: var(--navy-2); color: #fff; font-size: 13.5px; font-weight: 700;
     padding: 10px 6px; text-align: center; border-left: 1px solid rgba(255,255,255,.14); cursor: pointer; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis; }
@@ -129,7 +128,6 @@
   .mcol .slot { height: var(--slot-h); border-top: 1px solid #EDF1F5; cursor: pointer; }
   .mcol .slot.hour { border-top-color: var(--line); }
   .mcol .slot:hover { background: #F1F6FA; }
-  .mcol .slot.lunch { background: #FAF7F0; }
 
   .entry { position: absolute; left: 3px; right: 3px; border-radius: 8px; padding: 4px 7px; overflow: hidden; cursor: grab;
     font-size: 12px; line-height: 1.35; border: 1px solid transparent; z-index: 3; background-color: #fff;
@@ -163,9 +161,6 @@
   .entry b { display: block; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .entry .tm { opacity: .75; font-size: 10.5px; font-variant-numeric: tabular-nums; }
 
-  .lunch-band { position: absolute; left: 0; right: 0; pointer-events: none; z-index: 1; display: flex;
-    align-items: center; justify-content: center; }
-  .lunch-band span { font-size: 12px; letter-spacing: .5em; color: #C9B78C; font-weight: 700; padding-left: .5em; }
   .recur-band { position: absolute; pointer-events: auto; z-index: 1; display: flex; align-items: center;
     justify-content: center; cursor: pointer; background: rgba(233,196,106,.18);
     border-top: 1px dashed rgba(190,150,60,.55); border-bottom: 1px dashed rgba(190,150,60,.55); }
@@ -296,7 +291,6 @@
           <option value="120">2시간</option>
         </select>
       </label>
-      <label class="opt"><input type="checkbox" id="meetSkipLunch" checked /> 점심시간(12~13시) 제외</label>
     </div>
     <div class="free-list" id="freeList"></div>
   </div>
@@ -432,7 +426,6 @@
   var SLOT_H = 36;              // 한 칸(30분) 높이 — 좁은 화면에서는 28px로 줄어든다
   var COMPACT_W = 760;          // 이 폭 이하이면 '한 화면에 보기'
   var SLOTS = (DAY_END - DAY_START) / STEP;
-  var LUNCH_S = 12 * 60, LUNCH_E = 13 * 60;
   var API = '/api/schedule';
   var LS_KEY = 'mlk-team-schedule-v1';
 
@@ -841,21 +834,11 @@
       for (var s = 0; s < SLOTS; s++) {
         var min = DAY_START + s * STEP;
         var slot = document.createElement('div');
-        slot.className = 'slot' + (min % 60 === 0 ? ' hour' : '') + (min >= LUNCH_S && min < LUNCH_E ? ' lunch' : '');
+        slot.className = 'slot' + (min % 60 === 0 ? ' hour' : '');
         (function (mm, mid) {
           slot.addEventListener('click', function () { openAddModal(mid, mm); });
         })(min, m.id);
         col.appendChild(slot);
-      }
-
-      // 점심 라벨(첫 열에만 글자, 나머지는 배경만)
-      if (m === members[0]) {
-        var lb = document.createElement('div');
-        lb.className = 'lunch-band';
-        lb.style.top = minToY(LUNCH_S) + 'px';
-        lb.style.height = (minToY(LUNCH_E) - minToY(LUNCH_S)) + 'px';
-        lb.innerHTML = '<span>점심</span>';
-        col.appendChild(lb);
       }
 
       // 빈 시간(회의 후보) 표시
@@ -1232,9 +1215,6 @@
     if (!sel.length || to <= from) return;
 
     var busy = new Array(SLOTS).fill(false);
-    if (el('meetSkipLunch').checked) {
-      for (var li = (LUNCH_S - DAY_START) / STEP; li < (LUNCH_E - DAY_START) / STEP; li++) busy[li] = true;
-    }
     dayEntries().forEach(function (e) {
       if (sel.indexOf(e.member_id) === -1) return;
       var s = Math.max(e.start_min, DAY_START), en = Math.min(e.end_min, DAY_END);
@@ -1535,7 +1515,7 @@
     state.meetOpen = !state.meetOpen;
     renderMeetPanel(); renderBoard();
   });
-  ['meetFrom', 'meetTo', 'meetDur', 'meetSkipLunch'].forEach(function (id) {
+  ['meetFrom', 'meetTo', 'meetDur'].forEach(function (id) {
     el(id).addEventListener('change', function () { computeFree(); renderBoard(); renderFreeList(); });
   });
   el('fSave').addEventListener('click', submitEntry);
@@ -1971,16 +1951,6 @@
       ctx.fillStyle = m.color || '#C7B48E';
       ctx.fillRect(gx + colW * i + 6, pad + titleH + headH - 5, colW - 12, 3);
     });
-
-    // 점심 배경
-    if (LUNCH_S < to && LUNCH_E > from) {
-      var ls = Math.max(LUNCH_S, from), le = Math.min(LUNCH_E, to);
-      ctx.fillStyle = '#FAF7F0';
-      ctx.fillRect(gx, yOf(ls), gw, yOf(le) - yOf(ls));
-      ctx.fillStyle = '#C9B78C';
-      ctx.font = '700 11px ' + FONT;
-      ctx.fillText('점 심', gx + gw / 2, (yOf(ls) + yOf(le)) / 2);
-    }
 
     // 전체 반복 일정 — 점심처럼 노란 띠 배경
     (state.recur || []).filter(function (e) { return e.member_id === RECUR_ALL; }).forEach(function (e) {
