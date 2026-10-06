@@ -387,7 +387,7 @@
       <div class="xl-t">📤 엑셀로 일정 올리기</div>
       <div class="xl-help">
         <b>날짜 · 이름 · 시작 · 종료 · 일정 · 메모</b> 순서로 채운 파일을 올리면 자동으로 등록됩니다.
-        (예: <code>2026-08-17</code> · <code>오재준</code> · <code>09:00</code> · <code>10:00</code> · <code>거래처 미팅</code>)
+        (예: <code>2026-08-17</code> · <code>홍길동</code> · <code>09:00</code> · <code>10:00</code> · <code>거래처 미팅</code>)
       </div>
       <input type="file" id="xlFile" accept=".xlsx,.xls,.csv" />
       <div class="mem-list" style="margin-top:10px">
@@ -886,7 +886,7 @@
     board.innerHTML = '';
     board.appendChild(grid);
     renderBands(grid, bands); // 열 위치를 재야 하므로 화면에 붙인 뒤에 그린다
-    renderRecurBands(grid);   // 전체 반복 일정 — 점심 같은 노란 띠
+    renderRecurBands(grid);   // 전체 반복 일정 — 표 전체를 가로지르는 노란 띠
     board.scrollLeft = sx; board.scrollTop = sy;
     // 처음 열었을 때는 지금 시각이 보이는 위치에서 시작
     if (!scrolledToNow && state.date === todayStr()) {
@@ -914,7 +914,7 @@
     (state.recur || []).forEach(function (e) {
       if (e.member_id === RECUR_ALL) {
         state.members.forEach(function (m) {
-          // recurAll: 화면·캡처에서는 블록 대신 점심 같은 노란 띠로 그린다 (비는시간 계산에는 그대로 쓴다)
+          // recurAll: 화면·캡처에서는 블록 대신 노란 배경 띠로 그린다 (비는시간 계산에는 그대로 쓴다)
           out.push(Object.assign({}, e, { id: e.id + '@' + m.id, member_id: m.id, recur: e.id, recurAll: e.id }));
         });
       } else if (state.members.some(function (m) { return m.id === e.member_id; })) {
@@ -933,7 +933,7 @@
     members.forEach(function (m, i) { idxOf[m.id] = i; });
     var groups = {};
     list.forEach(function (e) {
-      if (e.recurAll) return; // 전체 반복은 점심처럼 노란 띠로 그린다
+      if (e.recurAll) return; // 전체 반복은 노란 배경 띠로 따로 그린다
       if (!(e.member_id in idxOf)) return;
       (groups[groupKey(e)] = groups[groupKey(e)] || []).push(e);
     });
@@ -980,7 +980,7 @@
     grid.appendChild(layer);
   }
 
-  // 전체('*') 반복 일정은 점심시간처럼 노란 띠로 깐다 (2026-09-07 요청) — 일정 블록과 한눈에 구분된다
+  // 전체('*') 반복 일정은 노란 배경 띠로 깐다 (2026-09-07 요청) — 일정 블록과 한눈에 구분된다
   function renderRecurBands(grid) {
     var rules = (state.recur || []).filter(function (e) { return e.member_id === RECUR_ALL; });
     if (!rules.length) return;
@@ -1952,7 +1952,7 @@
       ctx.fillRect(gx + colW * i + 6, pad + titleH + headH - 5, colW - 12, 3);
     });
 
-    // 전체 반복 일정 — 점심처럼 노란 띠 배경
+    // 전체 반복 일정 — 노란 띠 배경
     (state.recur || []).filter(function (e) { return e.member_id === RECUR_ALL; }).forEach(function (e) {
       var rs = Math.max(e.start_min, from), re2 = Math.min(e.end_min, to);
       if (re2 <= rs) return;
