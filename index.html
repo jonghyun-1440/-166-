@@ -82,6 +82,14 @@
   .tm-row .mini { padding: 6px 9px; font-size: 12px; flex: none; }
   .tm-row.gone { opacity: .45; }
   .tm-row.gone input[type=text] { text-decoration: line-through; }
+  /* 끌어서 순서 바꾸기 손잡이 — 손가락으로 잡기 좋게 넉넉하게 */
+  .tm-grip { flex: none; width: 32px; height: 36px; display: flex; align-items: center; justify-content: center;
+    font-size: 20px; color: var(--faint); cursor: grab; border-radius: 8px; touch-action: none;
+    user-select: none; -webkit-user-select: none; }
+  .tm-grip:hover { background: var(--soft); color: var(--navy-2); }
+  .tm-row.dragging { background: #fff; border-radius: 10px; box-shadow: 0 8px 22px rgba(30,58,80,.25);
+    position: relative; z-index: 2; border-bottom-color: transparent; }
+  .tm-row.dragging .tm-grip { cursor: grabbing; color: var(--navy-2); }
   .tm-row .tag { font-size: 11px; font-weight: 700; color: var(--brass); flex: none; }
   .today-btn { border: 1px solid var(--line); background: #fff; border-radius: 9px; padding: 6px 12px; font-size: 13px;
     font-weight: 700; color: var(--navy-2); }
@@ -477,7 +485,7 @@
 <div class="modal-bg" id="teamModalBg">
   <div class="modal" style="max-width: 520px">
     <h3>👥 팀원 설정</h3>
-    <div class="xl-help">이름·색·순서를 고치고 「저장」을 누르면 팀 전체 화면에 반영됩니다. 삭제한 팀원의 일정은 함께 지워집니다.</div>
+    <div class="xl-help">이름·색을 고치고, 왼쪽 ⠿ 손잡이를 잡고 끌어 순서를 바꾼 뒤 「저장」을 누르면 팀 전체 화면에 반영됩니다. 삭제한 팀원의 일정은 함께 지워집니다.</div>
     <div id="tmList" style="margin-top:8px"></div>
     <div class="tm-row" style="border-bottom:0;margin-top:6px">
       <input type="text" id="tmNew" maxlength="20" placeholder="새 팀원 이름" />
@@ -1927,6 +1935,12 @@
     teamDraft.forEach(function (t, i) {
       var row = document.createElement('div');
       row.className = 'tm-row' + (t.gone ? ' gone' : '');
+      row.dataset.key = t.id;
+      var grip = document.createElement('span');
+      grip.className = 'tm-grip';
+      grip.textContent = '⠿';
+      grip.title = '잡고 위아래로 끌어 순서 바꾸기';
+      grip.addEventListener('pointerdown', function (ev) { startTeamDrag(ev, row, grip); });
       var color = document.createElement('input');
       color.type = 'color'; color.value = t.color; color.title = '색 바꾸기'; color.disabled = t.gone;
       color.addEventListener('input', function () { t.color = color.value; });
@@ -1946,13 +1960,49 @@
         if (t.isNew) teamDraft.splice(i, 1); else t.gone = !t.gone;
         renderTeamList();
       });
-      row.appendChild(color); row.appendChild(name);
+      row.appendChild(grip); row.appendChild(color); row.appendChild(name);
       if (t.isNew) { var tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = '새 팀원'; row.appendChild(tag); }
       if (t.gone) { var tag2 = document.createElement('span'); tag2.className = 'tag'; tag2.textContent = '삭제 예정'; row.appendChild(tag2); }
       row.appendChild(up); row.appendChild(down); row.appendChild(del);
       box.appendChild(row);
     });
   }
+  // 손잡이를 잡고 끌면 줄이 손가락을 따라 자리를 바꾼다 — 놓는 순간 그 순서로 확정(저장은 「저장」에서)
+  function startTeamDrag(ev, row, grip) {
+    if (ev.button !== undefined && ev.button !== 0) return;
+    ev.preventDefault();
+    var box = el('tmList'), pid = ev.pointerId;
+    // ⚠️ 움직임은 문서 전체에서 받는다 — 줄을 옮기면(DOM 이동) 손잡이의 포인터 캡처가 풀려
+    // 손잡이에만 걸어 두면 첫 칸 이동 뒤로 움직임을 놓친다
+    row.classList.add('dragging');
+    if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
+    function onMove(e) {
+      if (e.pointerId !== pid) return;
+      e.preventDefault();
+      var others = Array.prototype.filter.call(box.children, function (r) { return r !== row; });
+      var before = null;
+      for (var i = 0; i < others.length; i++) {
+        var rc = others[i].getBoundingClientRect();
+        if (e.clientY < rc.top + rc.height / 2) { before = others[i]; break; }
+      }
+      if (before) { if (row.nextSibling !== before) box.insertBefore(row, before); }
+      else if (box.lastChild !== row) box.appendChild(row);
+    }
+    function onUp(e) {
+      if (e && e.pointerId !== pid) return;
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+      row.classList.remove('dragging');
+      var order = Array.prototype.map.call(box.children, function (r) { return r.dataset.key; });
+      teamDraft.sort(function (a, b) { return order.indexOf(a.id) - order.indexOf(b.id); });
+      renderTeamList(); // ▲▼ 사용 가능 여부를 새 순서에 맞춘다
+    }
+    document.addEventListener('pointermove', onMove, { passive: false });
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+  }
+
   async function saveTeam() {
     var err = el('tmErr');
     var keep = teamDraft.filter(function (t) { return !t.gone; });
