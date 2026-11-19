@@ -122,6 +122,25 @@
 
   /* ── 타임테이블 ── */
   .board-wrap { max-width: 1360px; margin: 14px auto 60px; padding: 0 16px; }
+  /* 주간 보기 (2026-11-19) */
+  .week-bar { max-width: 1360px; margin: 12px auto 0; padding: 0 16px; }
+  .week-bar .inner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; background: #fff;
+    border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+  .week-bar select { border: 1px solid var(--line); border-radius: 9px; padding: 7px 10px; font-size: 14.5px;
+    font-weight: 700; color: var(--deep); background: #fff; }
+  .week-bar .lbl { font-size: 14px; font-weight: 700; color: var(--deep); }
+  .week-bar .hint { font-size: 12.5px; color: var(--muted); margin-left: auto; }
+  .grid.week .hcell .wd { font-size: 11px; opacity: .8; margin-right: 4px; }
+  .grid.week .hcell.today { background: var(--brass); }
+  .grid.week .hcell.sun { color: #FFC9C4; } .grid.week .hcell.sat { color: #C9DCF2; }
+  .grid.week .mcol.today { background: #FFFCF4; }
+  .grid.week .entry { cursor: pointer; touch-action: manipulation; }
+  .wk-band { position: absolute; left: 0; right: 0; z-index: 1; background: rgba(233,196,106,.18); cursor: pointer;
+    border-top: 1px dashed rgba(190,150,60,.55); border-bottom: 1px dashed rgba(190,150,60,.55);
+    display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .wk-band span { font-size: 11px; font-weight: 700; color: #A9821E; padding: 0 4px; text-align: center; line-height: 1.2; }
+  .grid.compact .wk-band span { font-size: 8.5px; }
+  @media (max-width: 760px) { .week-bar { padding: 0 6px; } .week-bar .hint { display: none; } }
   .board { overflow: auto; background: #fff; border: 1px solid var(--line); border-radius: 14px;
     max-height: calc(100vh - 150px); }
   .grid { display: grid; min-width: 1150px; position: relative; --slot-h: 36px; }
@@ -291,6 +310,7 @@
     </div>
     <button class="today-btn" id="copyBtn" title="오늘 일정표를 이미지로 복사해 카톡·텔레그램에 붙여넣기">📷 복사</button>
     <button class="today-btn" id="xlBtn" title="엑셀로 내려받기 / 엑셀로 일정 올리기">📊 엑셀</button>
+    <button class="today-btn" id="weekBtn" title="팀원 한 명의 일주일 일정 보기">📅 주간 보기</button>
     <button class="today-btn" id="wideBtn" title="넓게 보기 / 한 화면에 보기">↔ 넓게</button>
     <button class="today-btn" id="installBtn" style="display:none" title="홈 화면에 앱으로 추가">📲 앱 설치</button>
     <button class="meet-btn" id="allAddBtn" style="background:var(--brass)" title="모든 팀원에게 같은 일정을 한 번에 등록">📌 전체 일정 추가</button>
@@ -323,6 +343,14 @@
       </label>
     </div>
     <div class="free-list" id="freeList"></div>
+  </div>
+</div>
+
+<div class="week-bar" id="weekBar" style="display:none">
+  <div class="inner">
+    <select id="weekWho" aria-label="주간 일정을 볼 팀원"></select>
+    <span class="lbl" id="weekLbl">님의 주간 일정</span>
+    <span class="hint">빈 칸: 일정 추가 · 일정: 수정 · 요일: 그날 하루 보기</span>
   </div>
 </div>
 
@@ -495,6 +523,9 @@
     members: [],
     entries: [],
     recur: [],             // 오늘 요일의 매주 반복 일정 (1900년 첫 주 날짜에 저장된 규칙)
+    weekMode: false,       // 주간 보기 — 팀원 한 명의 월~일
+    weekMember: localStorage.getItem('mlk-sched-week-member') || null,
+    week: null,            // { start, days: [{ date, entries, recur }] } — 7일 치 (전 팀원)
     mode: null,            // 'server' | 'local'
     meetOpen: false,
     meetSel: {},           // member_id -> bool
@@ -843,14 +874,203 @@
     renderDate();
     renderBoard();
     renderMeetPanel();
+    if (state.weekMode) loadWeek();
   }
 
   function renderDate() {
     var p = state.date.split('-');
+    if (state.weekMode) {
+      var a = weekStart(state.date), b = shiftDate(a, 6);
+      var pa = a.split('-'), pb = b.split('-');
+      el('dateText').innerHTML = pa[0] + '년 ' + Number(pa[1]) + '월 ' + Number(pa[2]) + '일 ~ ' +
+        (pa[1] === pb[1] ? '' : Number(pb[1]) + '월 ') + Number(pb[2]) + '일 <span class="dow">(주간)</span>';
+      return;
+    }
     el('dateText').innerHTML = p[0] + '년 ' + Number(p[1]) + '월 ' + Number(p[2]) + '일 <span class="dow">(' + dowKo(state.date) + ')</span>';
   }
 
+  // ── 주간 보기 (2026-11-19 요청) — 팀원 한 명의 월~일을 한 표에 ──
+  function weekStart(d) { // 그 날이 든 주의 월요일
+    var g = new Date(d + 'T00:00:00').getDay();
+    return shiftDate(d, -((g + 6) % 7));
+  }
+  async function fetchDayRows(d) {
+    if (state.mode === 'server') {
+      var r = await fetch(API + '?date=' + d);
+      if (!r.ok) throw new Error('week ' + r.status);
+      return (await r.json()).entries || [];
+    }
+    if (state.mode === 'offline') {
+      if (/^1900-/.test(d)) return cachedRecur(d);
+      var c = cachedDay(d);
+      return (c && c.entries) || [];
+    }
+    var db = localLoad();
+    return ((db.entries || {})[d]) || [];
+  }
+  var weekToken = 0;
+  async function loadWeek() {
+    var start = weekStart(state.date), my = ++weekToken;
+    var dates = [0, 1, 2, 3, 4, 5, 6].map(function (i) { return shiftDate(start, i); });
+    try {
+      var rows = await Promise.all(dates.map(fetchDayRows).concat(
+        [1, 2, 3, 4, 5, 6, 7].map(function (n) { return fetchDayRows('1900-01-0' + n); }))); // 월~일 반복 규칙
+      if (my !== weekToken || !state.weekMode) return;
+      state.week = { start: start, days: dates.map(function (d, i) { return { date: d, entries: rows[i], recur: rows[7 + i] }; }) };
+      renderBoard();
+    } catch (e) {
+      if (my === weekToken) setStatus('주간 일정을 불러오지 못했습니다 — 잠시 후 다시 시도합니다');
+    }
+  }
+  function setWeekMode(on) {
+    state.weekMode = on;
+    if (on) { state.meetOpen = false; state.week = null; }
+    el('weekBtn').textContent = on ? '🗓 하루 보기' : '📅 주간 보기';
+    el('weekBtn').title = on ? '팀 전체의 하루 보기로 돌아가기' : '팀원 한 명의 일주일 일정 보기';
+    el('weekBar').style.display = on ? '' : 'none';
+    el('copyBtn').disabled = on; el('meetToggle').disabled = on;
+    el('copyBtn').style.opacity = el('meetToggle').style.opacity = on ? '.45' : '';
+    render();
+  }
+  function weekMember() {
+    var m = state.members.find(function (x) { return x.id === state.weekMember; }) || state.members[0];
+    if (m) state.weekMember = m.id;
+    return m;
+  }
+  function renderWeekBoard() {
+    var m = weekMember();
+    var who = el('weekWho');
+    who.innerHTML = '';
+    state.members.forEach(function (x) { who.add(new Option(x.name, x.id)); });
+    if (m) who.value = m.id;
+    var compact = isCompact();
+    SLOT_H = compact ? 28 : 36;
+    var start = weekStart(state.date), today = todayStr();
+    var week = state.week && state.week.start === start ? state.week : null;
+    var grid = document.createElement('div');
+    grid.className = 'grid week' + (compact ? ' compact' : '');
+    grid.style.gridTemplateColumns = compact ? '30px repeat(7, minmax(0, 1fr))' : '58px repeat(7, minmax(120px, 1fr))';
+    if (!compact) grid.style.minWidth = '900px';
+
+    var corner = document.createElement('div');
+    corner.className = 'hcell corner';
+    corner.textContent = '시간';
+    grid.appendChild(corner);
+    var dates = [0, 1, 2, 3, 4, 5, 6].map(function (i) { return shiftDate(start, i); });
+    dates.forEach(function (d, i) {
+      var h = document.createElement('div');
+      h.className = 'hcell' + (d === today ? ' today' : '') + (i === 5 ? ' sat' : i === 6 ? ' sun' : '');
+      h.title = '이 날 하루 보기';
+      h.innerHTML = '<span class="wd">' + RECUR_DOW[i] + '</span>' + Number(d.slice(5, 7)) + '/' + Number(d.slice(8));
+      h.addEventListener('click', function () { state.date = d; setWeekMode(false); loadDay(); });
+      grid.appendChild(h);
+    });
+
+    var tc = document.createElement('div');
+    tc.className = 'timecol';
+    for (var s = 0; s < SLOTS; s++) {
+      var min = DAY_START + s * STEP;
+      var t = document.createElement('div');
+      t.className = 't' + (min % 60 ? ' half' : '');
+      t.innerHTML = '<span class="hh">' + String(Math.floor(min / 60)).padStart(2, '0') +
+        '</span><span class="mm">:' + String(min % 60).padStart(2, '0') + '</span>';
+      tc.appendChild(t);
+    }
+    grid.appendChild(tc);
+
+    var color = (m && m.color) || '#3E6288';
+    dates.forEach(function (d, i) {
+      var col = document.createElement('div');
+      col.className = 'mcol' + (d === today ? ' today' : '');
+      for (var s2 = 0; s2 < SLOTS; s2++) {
+        var mm = DAY_START + s2 * STEP;
+        var slot = document.createElement('div');
+        slot.className = 'slot' + (mm % 60 === 0 ? ' hour' : '');
+        (function (dd, sm) {
+          slot.addEventListener('click', function () {
+            if (!m) return;
+            state.date = dd;
+            renderDate();
+            openAddModal(m.id, sm);
+          });
+        })(d, mm);
+        col.appendChild(slot);
+      }
+      if (week && m) {
+        var day = week.days[i];
+        // 전체 반복은 노란 띠, 이 사람 반복은 금색 블록
+        (day.recur || []).forEach(function (r) {
+          if (r.member_id !== RECUR_ALL) return;
+          var top = minToY(Math.max(r.start_min, DAY_START)), bottom = minToY(Math.min(r.end_min, DAY_END));
+          if (bottom <= top) return;
+          var b = document.createElement('div');
+          b.className = 'wk-band';
+          b.style.top = top + 'px'; b.style.height = (bottom - top) + 'px';
+          b.title = '매주 반복 — ' + r.title + ' ' + fmtMin(r.start_min) + '~' + fmtMin(r.end_min) + ' (누르면 수정)';
+          b.innerHTML = '<span>🔁 ' + esc(r.title) + '</span>';
+          b.addEventListener('click', function () { openRecurModal(r); });
+          col.appendChild(b);
+        });
+        var counts = {};
+        (day.entries || []).forEach(function (e) { counts[groupKey(e)] = (counts[groupKey(e)] || 0) + 1; });
+        var list = (day.entries || []).filter(function (e) { return e.member_id === m.id; })
+          .concat((day.recur || []).filter(function (r) { return r.member_id === m.id; })
+            .map(function (r) { return Object.assign({}, r, { recur: r.id }); }));
+        layoutOverlaps(list).forEach(function (pl) {
+          var e = pl.e;
+          var top2 = minToY(Math.max(e.start_min, DAY_START)), bottom2 = minToY(Math.min(e.end_min, DAY_END));
+          if (bottom2 <= top2) return;
+          var c = e.recur ? '#D9A62E' : color;
+          var n = e.recur ? 0 : counts[groupKey(e)];
+          var div = document.createElement('div');
+          div.className = 'entry';
+          div.style.top = (top2 + 2) + 'px';
+          div.style.height = Math.max(bottom2 - top2 - 4, 20) + 'px';
+          div.style.backgroundImage = 'linear-gradient(' + hexToRgba(c, .13) + ',' + hexToRgba(c, .13) + ')';
+          div.style.borderColor = hexToRgba(c, .35);
+          div.style.borderLeft = '4px solid ' + c;
+          div.style.color = '#243B50';
+          if (pl.of > 1) {
+            div.style.left = 'calc(' + (pl.lane * 100 / pl.of) + '% + 3px)';
+            div.style.right = 'calc(' + ((pl.of - 1 - pl.lane) * 100 / pl.of) + '% + 3px)';
+          }
+          var tag = n > 1 ? (n === state.members.length ? '전원' : n + '명') : '';
+          div.innerHTML = '<b>' + (e.recur ? '🔁 ' : '') + esc(e.title) + '</b><span class="tm">' +
+            fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + (tag ? ' · ' + tag : '') + '</span>';
+          div.title = e.title + ' ' + fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + (tag ? ' (' + tag + ')' : '') +
+            (e.memo ? '\n' + e.memo : '') + '\n(누르면 수정)';
+          div.addEventListener('click', async function () {
+            if (e.recur) { openRecurModal(e); return; }
+            state.date = d;
+            await loadDay(true);
+            var found = state.entries.find(function (x) { return x.id === e.id; });
+            if (found) openEditModal([found]);
+          });
+          col.appendChild(div);
+        });
+      }
+      if (d === today) {
+        var now = new Date(), nm = now.getHours() * 60 + now.getMinutes();
+        if (nm >= DAY_START && nm <= DAY_END) {
+          var ln = document.createElement('div');
+          ln.className = 'now-line';
+          ln.style.top = minToY(nm) + 'px';
+          col.appendChild(ln);
+        }
+      }
+      grid.appendChild(col);
+    });
+
+    el('weekLbl').textContent = '님의 주간 일정' + (week ? '' : ' · 불러오는 중…');
+    var board = el('board');
+    var sy = board.scrollTop;
+    board.innerHTML = '';
+    board.appendChild(grid);
+    board.scrollTop = sy;
+  }
+
   function renderBoard() {
+    if (state.weekMode) { renderWeekBoard(); return; }
     var members = state.members;
     var compact = isCompact();
     SLOT_H = compact ? 28 : 36;
@@ -1257,6 +1477,7 @@
 
   // ── 회의 시간 찾기 ──
   function renderMeetPanel() {
+    if (state.weekMode) { el('meetPanel').className = 'meet-panel'; return; }
     el('meetPanel').className = 'meet-panel' + (state.meetOpen ? ' open' : '');
     el('meetToggle').className = 'meet-btn' + (state.meetOpen ? ' on' : '');
     if (!state.meetOpen) return;
@@ -1766,8 +1987,14 @@
   }
 
   // ── 이벤트 바인딩 ──
-  el('prevDay').addEventListener('click', function () { state.date = shiftDate(state.date, -1); loadDay(); });
-  el('nextDay').addEventListener('click', function () { state.date = shiftDate(state.date, 1); loadDay(); });
+  el('prevDay').addEventListener('click', function () { state.date = shiftDate(state.date, state.weekMode ? -7 : -1); loadDay(); });
+  el('nextDay').addEventListener('click', function () { state.date = shiftDate(state.date, state.weekMode ? 7 : 1); loadDay(); });
+  el('weekBtn').addEventListener('click', function () { setWeekMode(!state.weekMode); });
+  el('weekWho').addEventListener('change', function (ev) {
+    state.weekMember = ev.target.value;
+    try { localStorage.setItem('mlk-sched-week-member', state.weekMember); } catch (e) {}
+    renderBoard();
+  });
   el('todayBtn').addEventListener('click', function () { state.date = todayStr(); loadDay(); });
   el('dateLabel').addEventListener('click', function (ev) { ev.stopPropagation(); toggleCal(); });
   el('calPrev').addEventListener('click', function () { calShift(-1); });
