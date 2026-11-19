@@ -52,7 +52,37 @@
     padding: 6px 13px; font-size: 14.5px; font-weight: 700; color: var(--deep); display: flex; align-items: center; gap: 7px; }
   .date-label:hover { background: var(--soft); }
   .date-label .dow { color: var(--brass); }
-  .date-label input[type=date] { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+  .date-label { cursor: pointer; user-select: none; }
+  .date-label .caret { font-size: 10px; color: var(--faint); }
+  /* 월간 달력 팝업 */
+  .cal-pop { position: fixed; z-index: 95; width: 296px; background: #fff; border: 1px solid var(--line);
+    border-radius: 14px; box-shadow: 0 14px 40px rgba(20,34,48,.22); padding: 12px; display: none; }
+  .cal-pop.open { display: block; }
+  .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .cal-head b { font-size: 15px; color: var(--deep); }
+  .cal-head button { width: 32px; height: 32px; border: 1px solid var(--line); background: #fff; border-radius: 8px; color: var(--navy-2); }
+  .cal-head button:hover { background: var(--soft); }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+  .cal-grid .wd { font-size: 11.5px; font-weight: 700; color: var(--muted); text-align: center; padding: 4px 0; }
+  .cal-grid .wd.sun, .cal-grid .d.sun { color: #C0473F; }
+  .cal-grid .wd.sat, .cal-grid .d.sat { color: #3E6288; }
+  .cal-grid .d { height: 36px; border: 0; background: transparent; border-radius: 9px; font-size: 14px;
+    font-weight: 600; color: var(--deep); cursor: pointer; }
+  .cal-grid .d:hover { background: var(--soft); }
+  .cal-grid .d.out { visibility: hidden; }
+  .cal-grid .d.today { box-shadow: inset 0 0 0 2px var(--gold); }
+  .cal-grid .d.sel { background: var(--navy-2); color: #fff; }
+  .cal-foot { display: flex; justify-content: flex-end; margin-top: 8px; }
+  /* 팀원 설정 */
+  .tm-row { display: flex; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid rgba(0,0,0,.06); }
+  .tm-row input[type=text] { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px;
+    font-size: 14px; color: var(--deep); background: #fff; }
+  .tm-row input[type=text]:focus { outline: none; border-color: var(--navy-1); }
+  .tm-row input[type=color] { width: 34px; height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: #fff; flex: none; }
+  .tm-row .mini { padding: 6px 9px; font-size: 12px; flex: none; }
+  .tm-row.gone { opacity: .45; }
+  .tm-row.gone input[type=text] { text-decoration: line-through; }
+  .tm-row .tag { font-size: 11px; font-weight: 700; color: var(--brass); flex: none; }
   .today-btn { border: 1px solid var(--line); background: #fff; border-radius: 9px; padding: 6px 12px; font-size: 13px;
     font-weight: 700; color: var(--navy-2); }
   .today-btn:hover { background: var(--soft); }
@@ -254,8 +284,7 @@
     <div class="date-nav">
       <button class="nav-btn" id="prevDay" title="이전 날">◀</button>
       <div class="date-label" id="dateLabel">
-        <span id="dateText">…</span>
-        <input type="date" id="datePick" />
+        <span id="dateText">…</span><span class="caret">▼</span>
       </div>
       <button class="nav-btn" id="nextDay" title="다음 날">▶</button>
       <button class="today-btn" id="todayBtn">오늘</button>
@@ -266,6 +295,7 @@
     <button class="today-btn" id="installBtn" style="display:none" title="홈 화면에 앱으로 추가">📲 앱 설치</button>
     <button class="meet-btn" id="allAddBtn" style="background:var(--brass)" title="모든 팀원에게 같은 일정을 한 번에 등록">📌 전체 일정 추가</button>
     <button class="meet-btn" id="recurBtn" title="매주 같은 요일에 자동으로 들어가는 일정을 관리">🔁 반복 일정</button>
+    <button class="today-btn" id="teamBtn" title="팀원 이름·색·순서를 고치고, 추가·삭제">👥 팀원 설정</button>
     <button class="meet-btn" id="meetToggle">🕐 회의 시간 찾기</button>
     <div class="status" id="status"><span class="dot"></span>연결 확인 중…</div>
   </div>
@@ -401,6 +431,35 @@
     </div>
 
     <div class="btns"><button class="btn" id="xlClose" style="flex:1">닫기</button></div>
+  </div>
+</div>
+
+<!-- 월간 달력 -->
+<div class="cal-pop" id="calPop" role="dialog" aria-label="날짜 선택">
+  <div class="cal-head">
+    <button id="calPrev" aria-label="이전 달">◀</button>
+    <b id="calTitle"></b>
+    <button id="calNext" aria-label="다음 달">▶</button>
+  </div>
+  <div class="cal-grid" id="calGrid"></div>
+  <div class="cal-foot"><button class="btn" id="calToday" style="padding:6px 12px;font-size:13px">오늘로</button></div>
+</div>
+
+<!-- 팀원 설정 모달 -->
+<div class="modal-bg" id="teamModalBg">
+  <div class="modal" style="max-width: 520px">
+    <h3>👥 팀원 설정</h3>
+    <div class="xl-help">이름·색·순서를 고치고 「저장」을 누르면 팀 전체 화면에 반영됩니다. 삭제한 팀원의 일정은 함께 지워집니다.</div>
+    <div id="tmList" style="margin-top:8px"></div>
+    <div class="tm-row" style="border-bottom:0;margin-top:6px">
+      <input type="text" id="tmNew" maxlength="20" placeholder="새 팀원 이름" />
+      <button class="btn mini" id="tmAdd">＋ 추가</button>
+    </div>
+    <div class="err" id="tmErr"></div>
+    <div class="btns">
+      <button class="btn" id="tmCancel">취소</button>
+      <button class="btn primary" id="tmSave">저장</button>
+    </div>
   </div>
 </div>
 
@@ -581,7 +640,7 @@
     }
     var db = localLoad();
     if (!db.members || !db.members.length) { db.members = localDefaults(); db.entries = {}; localSave(db); }
-    state.members = db.members;
+    state.members = db.members.slice().sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
     state.entries = (db.entries && db.entries[date]) || [];
     state.recur = (db.entries && db.entries[recurDateFor(date)]) || [];
     setStatus();
@@ -647,6 +706,18 @@
     } else {
       var db = localLoad();
       (db.members = db.members || []).push(row);
+      localSave(db);
+    }
+  }
+  async function upsertMemberRow(row) {
+    assertWritable();
+    if (state.mode === 'server') {
+      await postMemberRow(row);
+    } else {
+      var db = localLoad();
+      db.members = db.members || [];
+      var i = db.members.findIndex(function (m) { return m.id === row.id; });
+      if (i >= 0) db.members[i] = row; else db.members.push(row);
       localSave(db);
     }
   }
@@ -777,7 +848,6 @@
   function renderDate() {
     var p = state.date.split('-');
     el('dateText').innerHTML = p[0] + '년 ' + Number(p[1]) + '월 ' + Number(p[2]) + '일 <span class="dow">(' + dowKo(state.date) + ')</span>';
-    el('datePick').value = state.date;
   }
 
   function renderBoard() {
@@ -1554,13 +1624,173 @@
     btn.disabled = false;
   }
 
+  // ── 월간 달력 (2026-11-19 요청) — 날짜를 누르면 한 달을 펼쳐 고른다 ──
+  var calCursor = null; // { y, m } 보고 있는 달 (m: 0~11)
+  function ymd(y, m, d) { return y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0'); }
+  function toggleCal() {
+    if (el('calPop').classList.contains('open')) { closeCal(); return; }
+    var p = state.date.split('-');
+    calCursor = { y: Number(p[0]), m: Number(p[1]) - 1 };
+    renderCal();
+    el('calPop').classList.add('open');
+    placeCal();
+  }
+  function closeCal() { el('calPop').classList.remove('open'); }
+  function placeCal() {
+    var pop = el('calPop'), r = el('dateLabel').getBoundingClientRect();
+    var w = pop.offsetWidth, vw = document.documentElement.clientWidth;
+    var left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), vw - w - 8);
+    pop.style.left = left + 'px';
+    pop.style.top = (r.bottom + 6) + 'px';
+  }
+  function calShift(n) {
+    var d = new Date(calCursor.y, calCursor.m + n, 1);
+    calCursor = { y: d.getFullYear(), m: d.getMonth() };
+    renderCal();
+  }
+  function pickDate(d) { closeCal(); if (d !== state.date) { state.date = d; loadDay(); } }
+  function renderCal() {
+    var y = calCursor.y, m = calCursor.m;
+    el('calTitle').textContent = y + '년 ' + (m + 1) + '월';
+    var g = el('calGrid');
+    g.innerHTML = '';
+    ['일', '월', '화', '수', '목', '금', '토'].forEach(function (w, i) {
+      var c = document.createElement('div');
+      c.className = 'wd' + (i === 0 ? ' sun' : i === 6 ? ' sat' : '');
+      c.textContent = w;
+      g.appendChild(c);
+    });
+    var lead = new Date(y, m, 1).getDay(), days = new Date(y, m + 1, 0).getDate(), today = todayStr();
+    for (var i = 0; i < lead; i++) {
+      var blank = document.createElement('div');
+      blank.className = 'd out';
+      g.appendChild(blank);
+    }
+    for (var d = 1; d <= days; d++) {
+      var ds = ymd(y, m, d), dow = (lead + d - 1) % 7;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'd' + (dow === 0 ? ' sun' : dow === 6 ? ' sat' : '') +
+        (ds === today ? ' today' : '') + (ds === state.date ? ' sel' : '');
+      b.textContent = d;
+      b.addEventListener('click', (function (v) { return function () { pickDate(v); }; })(ds));
+      g.appendChild(b);
+    }
+  }
+
+  // ── 팀원 설정 (2026-11-19 요청) — 이름·색·순서·추가·삭제를 한 창에서 고치고 한 번에 저장 ──
+  var teamDraft = []; // { id, name, color, sort, isNew, gone }
+  function openTeamModal() {
+    teamDraft = state.members.map(function (m) {
+      return { id: m.id, name: m.name, color: m.color || '#3E6288', orig: m, isNew: false, gone: false };
+    });
+    el('tmNew').value = '';
+    el('tmErr').className = 'err';
+    renderTeamList();
+    el('teamModalBg').classList.add('open');
+  }
+  function closeTeamModal() { el('teamModalBg').classList.remove('open'); }
+  function teamAddDraft() {
+    var name = el('tmNew').value.trim();
+    if (!name) return;
+    var used = teamDraft.map(function (t) { return t.color; });
+    var color = PALETTE.filter(function (c) { return used.indexOf(c) === -1; })[0] || PALETTE[teamDraft.length % PALETTE.length];
+    teamDraft.push({ id: 'm' + uid(), name: name, color: color, isNew: true, gone: false });
+    el('tmNew').value = '';
+    renderTeamList();
+    el('tmNew').focus();
+  }
+  function renderTeamList() {
+    var box = el('tmList');
+    box.innerHTML = '';
+    teamDraft.forEach(function (t, i) {
+      var row = document.createElement('div');
+      row.className = 'tm-row' + (t.gone ? ' gone' : '');
+      var color = document.createElement('input');
+      color.type = 'color'; color.value = t.color; color.title = '색 바꾸기'; color.disabled = t.gone;
+      color.addEventListener('input', function () { t.color = color.value; });
+      var name = document.createElement('input');
+      name.type = 'text'; name.maxLength = 20; name.value = t.name; name.disabled = t.gone;
+      name.addEventListener('input', function () { t.name = name.value; });
+      var up = document.createElement('button');
+      up.className = 'btn mini'; up.textContent = '▲'; up.title = '앞으로'; up.disabled = i === 0;
+      up.addEventListener('click', function () { teamDraft.splice(i - 1, 0, teamDraft.splice(i, 1)[0]); renderTeamList(); });
+      var down = document.createElement('button');
+      down.className = 'btn mini'; down.textContent = '▼'; down.title = '뒤로'; down.disabled = i === teamDraft.length - 1;
+      down.addEventListener('click', function () { teamDraft.splice(i + 1, 0, teamDraft.splice(i, 1)[0]); renderTeamList(); });
+      var del = document.createElement('button');
+      del.className = 'btn mini' + (t.gone ? '' : ' danger');
+      del.textContent = t.gone ? '되살리기' : '삭제';
+      del.addEventListener('click', function () {
+        if (t.isNew) teamDraft.splice(i, 1); else t.gone = !t.gone;
+        renderTeamList();
+      });
+      row.appendChild(color); row.appendChild(name);
+      if (t.isNew) { var tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = '새 팀원'; row.appendChild(tag); }
+      if (t.gone) { var tag2 = document.createElement('span'); tag2.className = 'tag'; tag2.textContent = '삭제 예정'; row.appendChild(tag2); }
+      row.appendChild(up); row.appendChild(down); row.appendChild(del);
+      box.appendChild(row);
+    });
+  }
+  async function saveTeam() {
+    var err = el('tmErr');
+    var keep = teamDraft.filter(function (t) { return !t.gone; });
+    keep.forEach(function (t) { t.name = (t.name || '').trim(); });
+    if (!keep.length) { err.textContent = '팀원이 한 명 이상 있어야 합니다.'; err.className = 'err show'; return; }
+    if (keep.some(function (t) { return !t.name; })) { err.textContent = '이름이 비어 있는 팀원이 있습니다.'; err.className = 'err show'; return; }
+    var seen = {}, dup = null;
+    keep.forEach(function (t) { if (seen[t.name]) dup = t.name; seen[t.name] = true; });
+    if (dup) { err.textContent = '「' + dup + '」 이름이 두 번 있습니다. 구분되게 바꿔 주세요.'; err.className = 'err show'; return; }
+    var gone = teamDraft.filter(function (t) { return t.gone; });
+    if (gone.length && !confirm(gone.map(function (t) { return t.name; }).join(', ') +
+        ' 님을 팀에서 제거할까요?\n등록된 일정도 모두 함께 삭제됩니다.')) return;
+    err.className = 'err';
+    var btn = el('tmSave');
+    btn.disabled = true; btn.textContent = '저장 중…';
+    try {
+      for (var g = 0; g < gone.length; g++) { await removeMemberRow(gone[g].id); delete state.meetSel[gone[g].id]; }
+      for (var i = 0; i < keep.length; i++) {
+        var t = keep[i], o = t.orig, sort = i + 1;
+        if (t.isNew || !o || o.name !== t.name || (o.color || '') !== t.color || o.sort !== sort) {
+          await upsertMemberRow({ id: t.id, name: t.name, color: t.color, sort: sort });
+        }
+      }
+      closeTeamModal();
+      await loadDay(true);
+    } catch (ex) {
+      err.textContent = writeErrMsg(ex, '저장하지 못했습니다. 네트워크를 확인하고 다시 시도해 주세요.');
+      err.className = 'err show';
+      await loadDay(true);
+    }
+    btn.disabled = false; btn.textContent = '저장';
+  }
+
   // ── 이벤트 바인딩 ──
   el('prevDay').addEventListener('click', function () { state.date = shiftDate(state.date, -1); loadDay(); });
   el('nextDay').addEventListener('click', function () { state.date = shiftDate(state.date, 1); loadDay(); });
   el('todayBtn').addEventListener('click', function () { state.date = todayStr(); loadDay(); });
-  el('datePick').addEventListener('change', function (ev) {
-    if (ev.target.value) { state.date = ev.target.value; loadDay(); }
-  });
+  el('dateLabel').addEventListener('click', function (ev) { ev.stopPropagation(); toggleCal(); });
+  el('calPrev').addEventListener('click', function () { calShift(-1); });
+  el('calNext').addEventListener('click', function () { calShift(1); });
+  el('calToday').addEventListener('click', function () { pickDate(todayStr()); });
+  el('calPop').addEventListener('click', function (ev) { ev.stopPropagation(); });
+  document.addEventListener('click', function () { closeCal(); });
+  window.addEventListener('resize', function () { if (el('calPop').classList.contains('open')) placeCal(); });
+  el('teamBtn').addEventListener('click', openTeamModal);
+  el('tmCancel').addEventListener('click', closeTeamModal);
+  el('teamModalBg').addEventListener('click', function (ev) { if (ev.target === ev.currentTarget) closeTeamModal(); });
+  el('tmAdd').addEventListener('click', teamAddDraft);
+  el('tmNew').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') teamAddDraft(); });
+  el('tmSave').addEventListener('click', saveTeam);
+  // 시작 시간을 고르면 종료를 1시간 뒤로 맞춰 둔다 (2026-11-19 요청) — 사용자가 다시 바꿀 수 있다
+  function autoEndHour(startSel, endSel) {
+    startSel.addEventListener('change', function () {
+      var end = Math.min(Number(startSel.value) + 60, DAY_END);
+      endSel.value = String(end);
+    });
+  }
+  autoEndHour(el('fStart'), el('fEnd'));
+  autoEndHour(el('rStart'), el('rEnd'));
   el('allAddBtn').addEventListener('click', openAllModal);
   el('recurBtn').addEventListener('click', function () { openRecurModal(); });
   el('rCancelEdit').addEventListener('click', function () { resetRecurForm(); renderRecurList(); });
@@ -1619,6 +1849,8 @@
       closeEntryModal();
       el('nameModalBg').classList.remove('open');
       el('xlModalBg').classList.remove('open');
+      closeCal();
+      closeTeamModal();
     }
   });
 
