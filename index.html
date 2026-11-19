@@ -335,7 +335,8 @@
 <div class="modal-bg" id="recurModalBg">
   <div class="modal" style="max-width: 560px">
     <h3>🔁 매주 반복 일정</h3>
-    <div class="xl-help">고른 요일마다 표에 자동으로 나타납니다. 드래그로 옮길 수 없고, 여기서 추가하고 삭제합니다.</div>
+    <div class="xl-help">고른 요일마다 표에 자동으로 나타납니다. 드래그로 옮길 수 없고, 여기서 추가·수정·삭제합니다.</div>
+    <div id="rEditBar" style="display:none;margin:10px 0 2px;padding:8px 12px;border-radius:10px;background:rgba(233,196,106,.18);color:#8A6A17;font-size:13px;font-weight:700"></div>
     <div class="f-row">
       <label class="t">제목</label>
       <input type="text" id="rTitle" maxlength="60" placeholder="예: 오전수업, 저녁수업" />
@@ -357,6 +358,7 @@
     <div class="err" id="rErr"></div>
     <div class="btns">
       <button class="btn" id="rClose">닫기</button>
+      <button class="btn" id="rCancelEdit" style="display:none">수정 취소</button>
       <button class="btn primary" id="rSave">반복 일정 추가</button>
     </div>
     <div class="xl-sec">
@@ -1000,8 +1002,8 @@
       div.style.top = (c1.offsetTop + top) + 'px';
       div.style.height = (bottom - top) + 'px';
       div.innerHTML = '<span>\uD83D\uDD01 ' + esc(e.title) + ' \u00B7 ' + fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + '</span>';
-      div.title = '\ub9e4\uc8fc \ubc18\ubcf5 \uc77c\uc815 \u2014 \ub204\ub974\uba74 \ubc18\ubcf5 \uc77c\uc815 \ucc3d\uc774 \uc5f4\ub9bd\ub2c8\ub2e4';
-      div.addEventListener('click', openRecurModal);
+      div.title = '\ub9e4\uc8fc \ubc18\ubcf5 \uc77c\uc815 \u2014 \ub204\ub974\uba74 \uc218\uc815\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4';
+      div.addEventListener('click', function () { openRecurModal(e); });
       layer.appendChild(div);
     });
     grid.appendChild(layer);
@@ -1081,7 +1083,7 @@
     if (entry.recur) {
       // 반복 일정은 날짜별로 끌어 옮길 수 없다 — 규칙 자체는 반복 일정 창에서 고친다
       ev.stopPropagation();
-      var upOnce = function () { div.removeEventListener('pointerup', upOnce); openRecurModal(); };
+      var upOnce = function () { div.removeEventListener('pointerup', upOnce); openRecurModal(entry); };
       div.addEventListener('pointerup', upOnce);
       return;
     }
@@ -1382,7 +1384,12 @@
   }
 
   // ── 매주 반복 일정 관리 ──
-  function openRecurModal() {
+  // 수정 중인 반복 규칙 — 같은 제목·시간·대상의 요일별 행 묶음 (null이면 새로 추가)
+  var recurEditing = null;
+  function recurKey(e) { return [e.title, e.start_min, e.end_min, e.member_id].join('|'); }
+
+  function resetRecurForm() {
+    recurEditing = null;
     var wrap = el('rDows');
     wrap.innerHTML = '';
     RECUR_DOW.forEach(function (d, i) {
@@ -1398,8 +1405,39 @@
     state.members.forEach(function (m) { who.add(new Option(m.name, m.id)); });
     el('rTitle').value = '';
     el('rErr').className = 'err';
+    el('rEditBar').style.display = 'none';
+    el('rCancelEdit').style.display = 'none';
+    el('rSave').textContent = '반복 일정 추가';
+  }
+
+  // 목록의 한 규칙을 폼에 불러와 수정 상태로 만든다
+  function startRecurEdit(g) {
+    resetRecurForm();
+    recurEditing = g;
+    var e = g[0];
+    el('rTitle').value = e.title;
+    g.forEach(function (x) {
+      var box = document.querySelector('#rDows input[value="' + Number(x.date.slice(-1)) + '"]');
+      if (box) box.checked = true;
+    });
+    fillTimeSelects(el('rStart'), el('rEnd'), e.start_min, e.end_min);
+    var who = el('rWho');
+    if (!Array.prototype.some.call(who.options, function (o) { return o.value === e.member_id; })) {
+      who.add(new Option(memberName(e.member_id), e.member_id)); // 명단에서 빠진 사람이어도 값은 지킨다
+    }
+    who.value = e.member_id;
+    el('rEditBar').textContent = '✏️ 「' + e.title + '」 수정 중 — 고친 뒤 「수정 저장」을 누르세요';
+    el('rEditBar').style.display = '';
+    el('rCancelEdit').style.display = '';
+    el('rSave').textContent = '수정 저장';
+    setTimeout(function () { el('rTitle').focus(); }, 50);
+  }
+
+  // rule을 주면(표의 띠·블록을 누른 경우) 그 규칙을 바로 수정 상태로 연다
+  function openRecurModal(rule) {
+    resetRecurForm();
     el('recurModalBg').classList.add('open');
-    renderRecurList();
+    renderRecurList(rule && rule.title ? recurKey(rule) : null);
   }
   function closeRecurModal() { el('recurModalBg').classList.remove('open'); }
 
@@ -1426,7 +1464,7 @@
     return out2;
   }
 
-  async function renderRecurList() {
+  async function renderRecurList(focusKey) {
     var box = el('rList');
     box.textContent = '불러오는 중…';
     var rows;
@@ -1440,16 +1478,24 @@
       (byRule[k] = byRule[k] || []).push(e);
     });
     box.innerHTML = '';
+    var editKey = recurEditing ? recurKey(recurEditing[0]) : null;
     Object.keys(byRule).sort().forEach(function (k) {
       var g = byRule[k].sort(function (a, b) { return a.date < b.date ? -1 : 1; });
       var e = g[0];
       var dows = g.map(function (x) { return RECUR_DOW[Number(x.date.slice(-1)) - 1]; }).join('·');
       var who = e.member_id === RECUR_ALL ? '전체' : memberName(e.member_id);
       var row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(0,0,0,.06)';
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(0,0,0,.06)' +
+        (k === editKey ? ';background:rgba(233,196,106,.14);border-radius:8px;padding-left:8px' : '');
       row.innerHTML = '<span style="flex:1;min-width:0"><b>' + esc(dows) + '</b> ' +
         fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + ' · ' + esc(e.title) +
         ' <span style="opacity:.65">(' + esc(who) + ')</span></span>';
+      var ed = document.createElement('button');
+      ed.className = 'btn';
+      ed.style.cssText = 'padding:4px 10px;font-size:12px';
+      ed.textContent = '수정';
+      ed.addEventListener('click', function () { startRecurEdit(g); renderRecurList(); });
+      row.appendChild(ed);
       var del = document.createElement('button');
       del.className = 'btn danger';
       del.style.cssText = 'padding:4px 10px;font-size:12px';
@@ -1460,6 +1506,7 @@
         del.disabled = true;
         try {
           for (var i = 0; i < g.length; i++) await deleteEntryRow(g[i].id, g[i].date);
+          if (recurEditing && recurKey(recurEditing[0]) === k) resetRecurForm(); // 수정 중이던 것을 지웠다
           await loadDay(true);
           renderRecurList();
         } catch (ex) {
@@ -1469,6 +1516,7 @@
       });
       row.appendChild(del);
       box.appendChild(row);
+      if (focusKey && k === focusKey) { focusKey = null; startRecurEdit(g); row.style.cssText += ';background:rgba(233,196,106,.14);border-radius:8px;padding-left:8px'; }
     });
   }
 
@@ -1483,20 +1531,27 @@
     if (eMin <= sMin) { err.textContent = '끝나는 시간이 시작 시간보다 늦어야 합니다.'; err.className = 'err show'; return; }
     err.className = 'err';
     var btn = el('rSave');
+    var editing = recurEditing;
     btn.disabled = true; btn.textContent = '저장 중…';
     try {
+      var old = {};                                   // 요일 번호 → 기존 행 (수정일 때만)
+      (editing || []).forEach(function (x) { old[Number(x.date.slice(-1))] = x; });
       for (var i = 0; i < dows.length; i++) {
-        await saveEntryRow({ id: 'r' + uid() + dows[i], date: '1900-01-0' + dows[i],
-          member_id: el('rWho').value, start_min: sMin, end_min: eMin, title: title, memo: '' });
+        await saveEntryRow({ id: old[dows[i]] ? old[dows[i]].id : 'r' + uid() + dows[i],
+          date: '1900-01-0' + dows[i], member_id: el('rWho').value,
+          start_min: sMin, end_min: eMin, title: title, memo: '' });
       }
-      el('rTitle').value = '';
+      var dropped = Object.keys(old).filter(function (n) { return dows.indexOf(Number(n)) === -1; });
+      for (var d = 0; d < dropped.length; d++) await deleteEntryRow(old[dropped[d]].id, old[dropped[d]].date);
+      resetRecurForm();
       await loadDay(true);
       renderRecurList();
     } catch (ex) {
       err.textContent = writeErrMsg(ex, '저장에 실패했습니다. 네트워크를 확인하고 다시 시도해 주세요.');
       err.className = 'err show';
+      btn.textContent = editing ? '수정 저장' : '반복 일정 추가';
     }
-    btn.disabled = false; btn.textContent = '반복 일정 추가';
+    btn.disabled = false;
   }
 
   // ── 이벤트 바인딩 ──
@@ -1507,7 +1562,8 @@
     if (ev.target.value) { state.date = ev.target.value; loadDay(); }
   });
   el('allAddBtn').addEventListener('click', openAllModal);
-  el('recurBtn').addEventListener('click', openRecurModal);
+  el('recurBtn').addEventListener('click', function () { openRecurModal(); });
+  el('rCancelEdit').addEventListener('click', function () { resetRecurForm(); renderRecurList(); });
   el('rSave').addEventListener('click', submitRecur);
   el('rClose').addEventListener('click', closeRecurModal);
   el('recurModalBg').addEventListener('click', function (ev) { if (ev.target === ev.currentTarget) closeRecurModal(); });
