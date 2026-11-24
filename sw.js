@@ -2,7 +2,7 @@
 // 화면(앱 껍데기)은 캐시해 두어 오프라인에서도 열리게 하고,
 // 일정 데이터(/api/)는 항상 서버에서 새로 받아온다.
 
-var CACHE = 'team-schedule-v7';
+var CACHE = 'team-schedule-v8';
 var SHELL = [
   '/',
   '/index.html',
@@ -43,8 +43,11 @@ self.addEventListener('fetch', function (e) {
   if (req.mode === 'navigate' || (req.headers.get('accept') || '').indexOf('text/html') !== -1) {
     e.respondWith(
       fetch(req).then(function (res) {
-        var copy = res.clone();
-        caches.open(CACHE).then(function (c) { c.put('/index.html', copy); });
+        // 정상 응답만 앱 화면으로 보관 (404·서버 오류 페이지가 오프라인 화면이 되지 않게)
+        if (res.ok && !res.redirected) {
+          var copy = res.clone();
+          caches.open(CACHE).then(function (c) { c.put('/index.html', copy); });
+        }
         return res;
       }).catch(function () {
         return caches.match('/index.html').then(function (r) { return r || caches.match('/'); });

@@ -33,7 +33,11 @@ schedule_cohorts ( id text PK 'musil-166', region text, num int, pin_hash text '
 - **출입증**: 로그인 성공 시 HMAC 서명 토큰(`{c: 기수id, v: 비밀번호 지문, e: 만료}`, 30일)을 주고,
   프런트는 `localStorage['mlk-sched-auth']`에 두고 모든 요청에 `X-Cohort-Token` 헤더로 보낸다(`apiFetch`).
   비밀번호를 바꾸면 지문(v)이 달라져 예전 토큰은 401 `{error:'auth', reason:'pin-changed'}` → 입장 화면.
-- **잠금**: 5회 틀리면 60초 잠금(`fail_count`, `locked_until`). 관리자 재설정(`ADMIN_PIN`)도 같은 잠금을 따른다.
+- **잠금**: 비밀번호를 확인하기 전에 `reserveAttempt()`가 `fail_count`를 조건부 PATCH(`fail_count=eq.현재값`)로 올려
+  시도 한 번을 예약한다 — 동시 요청으로 횟수를 건너뛸 수 없다. 5의 배수째에 `locked_until`(60초), 맞히면 0.
+  관리자 재설정은 숨은 줄 `__admin`(기수 목록에서 제외)으로 사이트 전체 횟수를 세고 5회에 15분 잠근다.
+- **기수 격리**: 일정 저장 전 같은 id가 다른 기수에 있으면 409 `id-taken`(남의 일정 덮어쓰기 방지).
+  기수 표 확인이 404가 아닌 오류면 종전 모드로 넘어가지 않고 오류를 낸다.
 
 - 시간은 전부 **자정 기준 분(int)**, 30분 스냅. 화면 범위는 `DAY_START`(06:00) ~ `DAY_END`(24:00), 칸은 `STEP`(30).
 - **공통 일정**: 별도 테이블 없이 같은 (제목·시간·메모)의 행을 사람 수만큼 넣고, 화면이
@@ -43,7 +47,9 @@ schedule_cohorts ( id text PK 'musil-166', region text, num int, pin_hash text '
   하루를 열 때 `recurDateFor(date)`로 그 요일의 1900 날짜를 함께 조회해 `expandRecur()`로 펼친다.
   - `member_id = '*'` 는 「전체」 — 화면·캡처에서 노란 배경 띠(`renderRecurBands`)로 그린다
   - 특정 팀원 대상은 그 사람 열의 금색 블록으로 그린다
-  - 반복 일정에서 펼친 항목은 `recur`(원본 규칙 id)를 달고 있어 드래그 대신 반복 일정 창을 연다
+  - 반복 일정에서 펼친 항목은 `recur`(원본 규칙 id)를 달고 있어 드래그 대신 `openRecurEdit()`로 일정 창(반복 수정 상태)을 연다
+  - 반복은 별도 창 없이 일정 창의 「매주 반복」 체크(`#fRepeat`, 요일 `#fDows`)로 만든다. 저장은 요일 × 대상마다 한 행,
+    대상을 모두 고르면 `'*'` 한 행. 한 「규칙」 = 같은 제목·시간이면서 반복 요일 집합이 같은 대상들(`editingRecur`)
 
 ## API — `/api/schedule` 하나
 

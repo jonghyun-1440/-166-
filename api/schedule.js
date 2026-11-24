@@ -63,6 +63,8 @@ function regionCode(r) {
 const TOKEN_DAYS = 30;          // 한 번 들어오면 그 기기에서 기억하는 기간
 const MAX_FAILS = 5;            // 비밀번호를 이만큼 틀리면
 const LOCK_SECONDS = 60;        // 이 시간 동안 잠근다
+const ADMIN_LOCK_SECONDS = 900; // 관리자 비밀번호는 사이트 전체에서 5번 틀리면 15분 잠근다
+const ADMIN_ROW = '__admin';    // 관리자 시도 횟수를 세는 숨은 줄 (기수 목록에는 안 보임)
 
 // 9명 기본 구성원 — 기수를 처음 열 때 자동 생성되고, 화면에서 이름을 바꿔 쓴다.
 const DEFAULT_MEMBER_COLORS = [
@@ -160,34 +162,45 @@ module.exports = async (req, res) => {
     const rows = await sb(`${cohortsTable}?id=eq.${enc(id)}&select=*`, null, 'cohort');
     return (rows && rows[0]) || null;
   }
-  // 틀린 횟수를 세고, 다 차면 잠근다 — 잠갔으면 true
-  async function countFail(c) {
-    const fails = (c.fail_count || 0) + 1;
-    const lock = fails >= MAX_FAILS;
-    await sb(`${cohortsTable}?id=eq.${enc(c.id)}`, {
-      method: 'PATCH',
-      body: JSON.stringify(lock
-        ? { fail_count: 0, locked_until: new Date(Date.now() + LOCK_SECONDS * 1000).toISOString() }
-        : { fail_count: fails })
-    }, 'fail');
-    return { lock, left: MAX_FAILS - fails };
+  // 비밀번호를 확인하기 「전에」 시도 한 번을 예약한다. fail_count를 조건부(지금 값일 때만)로 올리므로
+  // 동시에 수천 번 보내도 한 번에 하나씩만 통과하고, MAX_FAILS번째에 잠긴다. 맞히면 0으로 되돌린다.
+  async function reserveAttempt(id, lockSeconds) {
+    for (let i = 0; i < 6; i++) {
+      const c = await getCohort(id);
+      if (!c) return { gone: true };
+      const wait = lockLeft(c);
+      if (wait > 0) return { wait };
+      const cur = c.fail_count || 0, next = cur + 1;
+      const locking = next % MAX_FAILS === 0;
+      const body = locking
+        ? { fail_count: next, locked_until: new Date(Date.now() + lockSeconds * 1000).toISOString() }
+        : { fail_count: next };
+      const rows = await sb(`${cohortsTable}?id=eq.${enc(id)}&fail_count=eq.${cur}`, {
+        method: 'PATCH', headers: sbHeaders({ Prefer: 'return=representation' }), body: JSON.stringify(body)
+      }, 'attempt');
+      if (rows && rows.length) return { c, locking, left: MAX_FAILS - (next % MAX_FAILS) };
+    }
+    return { wait: 3 }; // 동시에 너무 많이 들어옴 — 잠시 뒤 다시
+  }
+  async function clearAttempts(id) {
+    await sb(`${cohortsTable}?id=eq.${enc(id)}`, {
+      method: 'PATCH', body: JSON.stringify({ fail_count: 0, locked_until: null })
+    }, 'reset');
   }
   // 비밀번호 확인 — 실패면 { status, body } 반환, 맞으면 null
   async function checkPin(c, pin) {
-    const wait = lockLeft(c);
-    if (wait > 0) return { status: 429, body: { error: 'locked', wait } };
-    if (pinMatches(pin, c.pin_hash)) {
-      if (c.fail_count) {
-        await sb(`${cohortsTable}?id=eq.${enc(c.id)}`, {
-          method: 'PATCH', body: JSON.stringify({ fail_count: 0, locked_until: null })
-        }, 'reset');
-      }
-      return null;
-    }
-    const f = await countFail(c);
-    return f.lock
+    const a = await reserveAttempt(c.id, LOCK_SECONDS);
+    if (a.gone) return { status: 404, body: { error: 'no-cohort' } };
+    if (a.wait) return { status: 429, body: { error: 'locked', wait: a.wait } };
+    if (pinMatches(pin, a.c.pin_hash)) { await clearAttempts(c.id); return null; }
+    return a.locking
       ? { status: 429, body: { error: 'locked', wait: LOCK_SECONDS } }
-      : { status: 401, body: { error: 'wrong-pin', left: f.left } };
+      : { status: 401, body: { error: 'wrong-pin', left: a.left } };
+  }
+  function sameSecret(a, b) {
+    const x = crypto.createHash('sha256').update(String(a)).digest();
+    const y = crypto.createHash('sha256').update(String(b)).digest();
+    return crypto.timingSafeEqual(x, y);
   }
   async function seedMembers(cohortId) {
     const seed = DEFAULT_MEMBER_COLORS.map((color, i) => ({
@@ -205,7 +218,7 @@ module.exports = async (req, res) => {
     let cohortMode = modeCache.at > Date.now() - 60000 ? modeCache.on : null;
     if (cohortMode === null) {
       const probe = await fetch(`${cohortsTable}?select=id&limit=1`, { headers: sbHeaders() });
-      if (!probe.ok && probe.status >= 500) throw new Error(`cohort-probe ${probe.status}`);
+      if (!probe.ok && probe.status !== 404) throw new Error(`cohort-probe ${probe.status}`);
       cohortMode = probe.ok;
       modeCache = { on: cohortMode, at: Date.now() };
     }
@@ -216,7 +229,7 @@ module.exports = async (req, res) => {
       const rows = await sb(`${cohortsTable}?select=id,region,num,pin_hash&order=num.asc&limit=500`, null, 'cohorts');
       return res.status(200).json({
         ok: true, mode: 'cohort', regions: REGIONS, adminEnabled: !!ADMIN_PIN,
-        cohorts: rows.map(publicCohort)
+        cohorts: rows.filter((r) => r.id !== ADMIN_ROW).map(publicCohort)
       });
     }
 
@@ -243,7 +256,7 @@ module.exports = async (req, res) => {
         return res.status(200).json({ ok: true, token: makeToken(c), cohort: publicCohort(c) });
       }
 
-      const c = await getCohort(String(b.cohort || ''));
+      const c = String(b.cohort || '') === ADMIN_ROW ? null : await getCohort(String(b.cohort || ''));
       if (!c) return res.status(404).json({ error: 'no-cohort' });
 
       // 비밀번호가 아직 없는 기수(옮겨 온 기수) — 처음 들어온 사람이 정한다
@@ -267,14 +280,20 @@ module.exports = async (req, res) => {
 
       if (b.type === 'admin-reset') {
         if (!ADMIN_PIN) return res.status(404).json({ error: 'no-admin' });
-        const wait = lockLeft(c);
-        if (wait > 0) return res.status(429).json({ error: 'locked', wait });
-        if (String(b.adminPin || '') !== ADMIN_PIN) {
-          const f = await countFail(c);
-          return f.lock
-            ? res.status(429).json({ error: 'locked', wait: LOCK_SECONDS })
+        // 관리자 시도는 기수마다가 아니라 사이트 전체로 센다 — 기수를 새로 만들어 횟수를 초기화할 수 없게
+        await fetch(cohortsTable, {
+          method: 'POST', headers: sbHeaders({ Prefer: 'resolution=ignore-duplicates' }),
+          body: JSON.stringify({ id: ADMIN_ROW, region: ADMIN_ROW, num: 0 })
+        });
+        const a = await reserveAttempt(ADMIN_ROW, ADMIN_LOCK_SECONDS);
+        if (a.wait) return res.status(429).json({ error: 'locked', wait: a.wait });
+        if (a.gone) throw new Error('admin-row');
+        if (!sameSecret(b.adminPin || '', ADMIN_PIN)) {
+          return a.locking
+            ? res.status(429).json({ error: 'locked', wait: ADMIN_LOCK_SECONDS })
             : res.status(401).json({ error: 'wrong-admin' });
         }
+        await clearAttempts(ADMIN_ROW);
         if (!PIN_RE.test(String(b.newPin || ''))) return res.status(400).json({ error: 'bad-pin' });
         const rows = await sb(`${cohortsTable}?id=eq.${enc(c.id)}`, {
           method: 'PATCH', headers: sbHeaders({ Prefer: 'return=representation' }),
@@ -296,6 +315,12 @@ module.exports = async (req, res) => {
     }
     // 기수 모드면 모든 조회·수정·삭제에 이 조건이 붙는다
     const scope = cohortMode ? `&cohort_id=eq.${enc(cohortId)}` : '';
+    // 저장하려는 일정 id가 다른 기수의 것인지 — upsert가 남의 일정을 덮어써 가져오지 못하게
+    async function idsTakenElsewhere(ids) {
+      if (!cohortMode || !ids.length) return false;
+      const rows = await sb(`${entriesTable}?select=id,cohort_id&id=in.(${ids.map((x) => enc('"' + x + '"')).join(',')})`, null, 'id-check');
+      return (rows || []).some((r) => r.cohort_id !== cohortId);
+    }
     const stamp = (row) => (cohortMode ? Object.assign(row, { cohort_id: cohortId }) : row);
 
     // 하루치 조회 — 구성원 목록 + 해당 날짜의 모든 일정
@@ -382,6 +407,7 @@ module.exports = async (req, res) => {
           if (!row) return res.status(400).json({ error: 'bad-entry' });
           rows.push(stamp(row));
         }
+        if (await idsTakenElsewhere(rows.map((r) => r.id))) return res.status(409).json({ error: 'id-taken' });
         await sb(entriesTable, {
           method: 'POST', headers: sbHeaders({ Prefer: 'resolution=merge-duplicates' }), body: JSON.stringify(rows)
         }, 'entries');
@@ -392,6 +418,7 @@ module.exports = async (req, res) => {
       if (b.type === 'entry') {
         const row = normalizeEntry(b.entry || {});
         if (!row) return res.status(400).json({ error: 'bad-entry' });
+        if (await idsTakenElsewhere([row.id])) return res.status(409).json({ error: 'id-taken' });
         await sb(entriesTable, {
           method: 'POST', headers: sbHeaders({ Prefer: 'resolution=merge-duplicates' }), body: JSON.stringify(stamp(row))
         }, 'entry');

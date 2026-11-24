@@ -447,6 +447,10 @@
   .cohort-chip { border: 1px solid rgba(169,136,79,.5); background: #FBF6EA; color: #8A6A17; border-radius: 99px; padding: 4px 11px;
     font-size: 12.5px; font-weight: 800; margin-left: 8px; display: none; }
   .cohort-chip.show { display: inline-block; }
+  .rep-toggle { padding: 7px 14px 7px 11px; font-size: 14px; }
+  .rep-toggle b { font-weight: 700; color: var(--deep); }
+  .rep-toggle:has(input:checked) { background: #FBF6E8; border-color: rgba(217,166,46,.6); }
+  #fDows .chip { min-width: 46px; justify-content: center; font-size: 14px; padding: 6px 10px; }
   /* 입장 화면 — 개편 */
   .gate { background: linear-gradient(180deg, var(--navy-2) 0, var(--navy-2) 230px, var(--page) 230px); }
   .gate-top { padding: 40px 16px 0; }
@@ -535,7 +539,6 @@
       <button class="tool" id="xlBtn" data-ico="sheet" title="엑셀로 내려받기 / 엑셀로 일정 올리기"><span class="lb">엑셀</span></button>
       <span class="sep"></span>
       <button class="tool" id="teamBtn" data-ico="users" title="팀원 이름·색·순서를 고치고, 추가·삭제"><span class="lb">팀원 설정</span></button>
-      <button class="tool" id="recurBtn" data-ico="repeat" title="매주 같은 요일에 자동으로 들어가는 일정을 관리"><span class="lb">반복 일정</span></button>
       <button class="tool" id="installBtn" data-ico="download" style="display:none" title="홈 화면에 앱으로 추가"><span class="lb">앱 설치</span></button>
       <button class="tool primary" id="allAddBtn" data-ico="plus" title="모든 팀원에게 같은 일정을 한 번에 등록"><span class="lb">전체 일정 추가</span></button>
     </nav>
@@ -593,6 +596,12 @@
         <select id="fStart"></select><span>~</span><select id="fEnd"></select>
       </div>
     </div>
+    <div class="f-row">
+      <label class="chip rep-toggle"><input type="checkbox" id="fRepeat" /><b>매주 반복</b></label>
+      <div class="mem-list" id="fDows" style="display:none;margin-top:8px"></div>
+      <div class="xl-help" id="fRepHelp" style="display:none">고른 요일마다 매주 자동으로 표에 들어갑니다.
+        대상을 모두 고르면 표 전체에 노란 띠로 보입니다.</div>
+    </div>
     <div class="f-row" id="fMemRow">
       <label class="t">대상 (여러 명을 고르면 각자의 칸에 같은 일정이 들어갑니다)</label>
       <div class="mem-list" id="fMembers"></div>
@@ -606,43 +615,6 @@
       <button class="btn danger" id="fDelete" style="display:none">삭제</button>
       <button class="btn" id="fCancel">취소</button>
       <button class="btn primary" id="fSave">저장</button>
-    </div>
-  </div>
-</div>
-
-<!-- 반복 일정 모달 -->
-<div class="modal-bg" id="recurModalBg">
-  <div class="modal" style="max-width: 560px">
-    <h3>매주 반복 일정</h3>
-    <div class="xl-help">고른 요일마다 표에 자동으로 나타납니다. 드래그로 옮길 수 없고, 여기서 추가·수정·삭제합니다.</div>
-    <div id="rEditBar" style="display:none;margin:10px 0 2px;padding:8px 12px;border-radius:10px;background:rgba(233,196,106,.18);color:#8A6A17;font-size:13px;font-weight:700"></div>
-    <div class="f-row">
-      <label class="t">제목</label>
-      <input type="text" id="rTitle" maxlength="60" placeholder="예: 오전수업, 저녁수업" />
-    </div>
-    <div class="f-row">
-      <label class="t">요일 (여러 개 선택)</label>
-      <div class="mem-list" id="rDows"></div>
-    </div>
-    <div class="f-row">
-      <label class="t">시간</label>
-      <div class="time-pair">
-        <select id="rStart"></select><span>~</span><select id="rEnd"></select>
-      </div>
-    </div>
-    <div class="f-row">
-      <label class="t">대상</label>
-      <select id="rWho" style="width:100%"></select>
-    </div>
-    <div class="err" id="rErr"></div>
-    <div class="btns">
-      <button class="btn" id="rClose">닫기</button>
-      <button class="btn" id="rCancelEdit" style="display:none">수정 취소</button>
-      <button class="btn primary" id="rSave">반복 일정 추가</button>
-    </div>
-    <div class="xl-sec">
-      <div class="xl-t">등록된 반복 일정</div>
-      <div id="rList" class="xl-help">불러오는 중…</div>
     </div>
   </div>
 </div>
@@ -834,11 +806,12 @@
     return (db.recurCache && db.recurCache[recurDate]) || [];
   }
   function assertWritable() {
-    if (state.mode === 'offline') throw { offline: true };
+    if (state.mode === 'offline' || !state.mode) throw { offline: true };
   }
   function writeErrMsg(ex, fallback) {
     return (ex && ex.offline)
-      ? '오프라인 상태에서는 변경할 수 없습니다. 연결된 뒤 다시 시도해 주세요.'
+      ? (state.mode ? '오프라인 상태에서는 변경할 수 없습니다. 연결된 뒤 다시 시도해 주세요.'
+                    : '서버에 다시 연결하는 중입니다. 잠시 후 다시 시도해 주세요.')
       : fallback;
   }
   function localDefaults() {
@@ -886,12 +859,18 @@
   }
   async function apiFetch(url, opts) {
     opts = opts || {};
+    var used = state.auth ? state.auth.token : null; // 이 요청에 실어 보낸 출입증
     if (state.auth) opts.headers = Object.assign({}, opts.headers || {}, { 'X-Cohort-Token': state.auth.token });
     var r = await fetch(url, opts);
     if (r.status === 401 && state.cohortMode) {
       var j = null;
       try { j = await r.clone().json(); } catch (e) {}
       if (j && j.error === 'auth') {
+        var stored = authLoad();
+        if (stored && stored.token !== used && !opts._retried) {
+          state.auth = stored;
+          return apiFetch(url, Object.assign({}, opts, { _retried: true }));
+        }
         authClear();
         showGate(j.reason === 'pin-changed' ? '기수 비밀번호가 바뀌었습니다. 새 비밀번호로 들어와 주세요.'
           : j.reason === 'gone' ? '이 기수가 삭제되었습니다.' : '');
@@ -945,7 +924,7 @@
   }
   async function showGate(msg) {
     closeEntryModal(); closeTeamModal(); closeCal();
-    ['nameModalBg', 'xlModalBg', 'recurModalBg', 'cohortModalBg'].forEach(function (id) { el(id).classList.remove('open'); });
+    ['nameModalBg', 'xlModalBg', 'cohortModalBg'].forEach(function (id) { el(id).classList.remove('open'); });
     el('gate').classList.add('open');
     applyCohortUI();
     gate = { step: 'region', region: null, cohort: null, buf: '', first: null, num: '', msg: msg || '', msgOk: !!msg };
@@ -962,6 +941,7 @@
   }
   function hideGate() { el('gate').classList.remove('open'); clearInterval(gateCountdown); }
   function gateGo(step, extra) {
+    clearInterval(gateCountdown); // 다른 화면으로 가면 잠금 카운트다운이 새 안내를 덮어쓰지 않게
     Object.assign(gate, { step: step, buf: '', msg: '', msgOk: false }, extra || {});
     renderGate();
   }
@@ -1135,7 +1115,7 @@
       if (np.length !== 4) { gateMsg('새 비밀번호는 숫자 4자리입니다'); return; }
       var res = await gatePost({ type: 'admin-reset', cohort: gate.cohort.id, adminPin: el('gAdmin').value, newPin: np });
       if (res.status === 200 && res.j.token) { gateEnter(res.j.token, res.j.cohort); return; }
-      gateMsg(res.j.error === 'locked' ? '여러 번 틀려 잠시 잠겼습니다. 1분 뒤 다시 시도하세요' : '관리자 비밀번호가 맞지 않습니다');
+      gateMsg(res.j.error === 'locked' ? '여러 번 틀려 잠시 잠겼습니다. ' + Math.max(1, Math.ceil((res.j.wait || 60) / 60)) + '분 뒤 다시 시도하세요' : '관리자 비밀번호가 맞지 않습니다');
     }
   });
   // PC: 숫자 키보드로도 누를 수 있게
@@ -1199,6 +1179,7 @@
     if (state.mode !== 'local') {
       try {
         var rq2 = apiFetch(API + '?date=' + recurDateFor(date)); // 이 요일의 반복 규칙도 함께
+        rq2.catch(function () {}); // 아래 본 요청이 먼저 실패해도 처리 안 된 오류로 남지 않게
         var r = await apiFetch(API + '?date=' + date);
         if (!r.ok) {
           var body = null;
@@ -1206,15 +1187,17 @@
           throw { status: r.status, detail: (body && (body.detail || body.error)) || '', body: body };
         }
         var j = await r.json();
-        if (date !== state.date) return; // 로딩 중 날짜가 바뀐 경우 무시
+        var recurRows = [];
+        try {
+          var r2 = await rq2;
+          recurRows = r2.ok ? ((await r2.json()).entries || []) : [];
+        } catch (eRec) { recurRows = []; }
+        if (date !== state.date) return; // 로딩 중 날짜가 바뀐 경우 무시 (반복 규칙까지 받은 뒤 확인)
         state.mode = 'server';
         state.serverErr = null;
         state.members = j.members || [];
         state.entries = j.entries || [];
-        try {
-          var r2 = await rq2;
-          state.recur = r2.ok ? ((await r2.json()).entries || []) : [];
-        } catch (eRec) { state.recur = []; }
+        state.recur = recurRows;
         cacheDay(date, j.members, j.entries); // 오프라인에서 볼 수 있게 보관
         cacheRecur(recurDateFor(date), state.recur);
         setStatus();
@@ -1241,7 +1224,16 @@
           render();
           return;
         }
-        state.mode = 'local'; // 미설정/최초 실패 → 로컬 모드
+        // 인터넷이 끊긴 것(또는 기수 모드)이라면 로컬 저장으로 빠지지 않고 보기 전용 → 자동 재연결
+        if (state.cohortMode || (state.serverErr.status === 0 && location.protocol !== 'file:')) {
+          state.mode = 'offline';
+          state.cachedAt = null;
+          state.members = state.members || []; state.entries = []; state.recur = [];
+          setStatus();
+          render();
+          return;
+        }
+        state.mode = 'local'; // 서버 미설정(503)·설치 오류 → 로컬 모드 (원인은 배너로 안내)
       }
     }
     var db = localLoad();
@@ -1372,7 +1364,9 @@
     var err = state.serverErr || {};
     var msg;
     if (state.mode === 'offline') {
-      msg = '인터넷에 연결되어 있지 않아 <b>마지막으로 받은 일정</b>을 보여주고 있습니다. ' +
+      msg = (state.cachedAt
+        ? '인터넷에 연결되어 있지 않아 <b>마지막으로 받은 일정</b>을 보여주고 있습니다. '
+        : '서버에 연결하지 못했습니다. 인터넷 연결을 확인해 주세요. ') +
         '연결되면 자동으로 최신 상태가 됩니다. (이 상태에서는 일정을 바꿀 수 없습니다)';
     } else if (err.status === 503) {
       var b = err.body || {};
@@ -1414,6 +1408,7 @@
   async function maybeMigrateLocal() {
     if (migrationChecked) return;
     migrationChecked = true;
+    if (state.cohortMode) return; // 기수 모드에서는 이 브라우저의 옛 로컬 일정을 옮기지 않는다
     var db = localLoad();
     if (!db.members || db.migrated) return;
     var renamed = db.members.filter(function (m) { return !/^팀원 \d+$/.test(m.name); });
@@ -1504,9 +1499,10 @@
     el('weekBtn').classList.toggle('on', on);
     el('weekBtn').title = on ? '팀 전체의 하루 보기로 돌아가기' : '팀원 한 명의 일주일 일정 보기';
     el('weekBar').style.display = on ? '' : 'none';
-    el('copyBtn').disabled = on; el('meetToggle').disabled = on;
+    el('meetToggle').disabled = on;
 
     render();
+    if (!on) loadDay(true); // 주간에서 다른 요일을 눌렀을 수 있다 — 표시 날짜의 일정으로 맞춘다
   }
   function weekMember() {
     var m = state.members.find(function (x) { return x.id === state.weekMember; }) || state.members[0];
@@ -1584,7 +1580,7 @@
           b.style.top = top + 'px'; b.style.height = (bottom - top) + 'px';
           b.title = '매주 반복 — ' + r.title + ' ' + fmtMin(r.start_min) + '~' + fmtMin(r.end_min) + ' (누르면 수정)';
           b.innerHTML = '<span>↻ ' + esc(r.title) + '</span>';
-          b.addEventListener('click', function () { openRecurModal(r); });
+          b.addEventListener('click', function () { state.date = d; renderDate(); openRecurEdit(r); });
           col.appendChild(b);
         });
         var counts = {};
@@ -1616,7 +1612,7 @@
           div.title = e.title + ' ' + fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + (tag ? ' (' + tag + ')' : '') +
             (e.memo ? '\n' + e.memo : '') + '\n(누르면 수정)';
           div.addEventListener('click', async function () {
-            if (e.recur) { openRecurModal(e); return; }
+            if (e.recur) { state.date = d; renderDate(); openRecurEdit(e); return; }
             state.date = d;
             await loadDay(true);
             var found = state.entries.find(function (x) { return x.id === e.id; });
@@ -1769,7 +1765,7 @@
   function isCompact() { return window.innerWidth <= COMPACT_W && !state.wide; }
 
   // 같은 제목·시간·메모로 여러 명에게 등록된 일정 = 하나의 공통 일정으로 본다
-  function groupKey(e) { return [e.title, e.start_min, e.end_min, e.memo || ''].join(''); }
+  function groupKey(e) { return [e.recur ? 'R' : 'N', e.title, e.start_min, e.end_min, e.memo || ''].join(''); }
   function groupOf(entry) {
     var k = groupKey(entry);
     return dayEntries().filter(function (x) { return groupKey(x) === k; });
@@ -1867,9 +1863,9 @@
       div.style.width = (c2.offsetLeft + c2.offsetWidth - c1.offsetLeft) + 'px';
       div.style.top = (c1.offsetTop + top) + 'px';
       div.style.height = (bottom - top) + 'px';
-      div.innerHTML = '<span>\uD83D\uDD01 ' + esc(e.title) + ' \u00B7 ' + fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + '</span>';
+      div.innerHTML = '<span>\u21BB ' + esc(e.title) + ' \u00B7 ' + fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + '</span>';
       div.title = '\ub9e4\uc8fc \ubc18\ubcf5 \uc77c\uc815 \u2014 \ub204\ub974\uba74 \uc218\uc815\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4';
-      div.addEventListener('click', function () { openRecurModal(e); });
+      div.addEventListener('click', function () { openRecurEdit(e); });
       layer.appendChild(div);
     });
     grid.appendChild(layer);
@@ -1921,7 +1917,7 @@
       '<div class="rz rz-bot"></div>';
     div.title = e.title + (e.memo ? '\n' + e.memo : '') +
       (whoLabel ? '\n함께: ' + group.map(function (x) { return memberName(x.member_id); }).join(', ') : '') +
-      (e.recur ? '\n매주 반복 일정 — 「반복 일정」에서 수정/삭제합니다'
+      (e.recur ? '\n매주 반복 일정 — 누르면 수정/삭제'
                : '\n(드래그: 이동 · 가장자리: 시간 조절)');
     div.addEventListener('pointerdown', function (ev) { startEntryDrag(ev, group, div); });
     return div;
@@ -1949,7 +1945,7 @@
     if (entry.recur) {
       // 반복 일정은 날짜별로 끌어 옮길 수 없다 — 규칙 자체는 반복 일정 창에서 고친다
       ev.stopPropagation();
-      var upOnce = function () { div.removeEventListener('pointerup', upOnce); openRecurModal(entry); };
+      var upOnce = function () { div.removeEventListener('pointerup', upOnce); openRecurEdit(entry); };
       div.addEventListener('pointerup', upOnce);
       return;
     }
@@ -2125,6 +2121,13 @@
     startSel.innerHTML = ''; endSel.innerHTML = '';
     for (var m = DAY_START; m < DAY_END; m += STEP) startSel.add(new Option(fmtMin(m), m));
     for (var m2 = DAY_START + STEP; m2 <= DAY_END; m2 += STEP) endSel.add(new Option(fmtMin(m2), m2));
+    // 목록에 없는 시각(엑셀로 들어온 09:15, 05:00 등)은 제자리에 끼워 넣어 값이 0으로 바뀌지 않게
+    [[startSel, s], [endSel, e]].forEach(function (pr) {
+      var sel = pr[0], v = Number(pr[1]);
+      if (!isFinite(v) || Array.prototype.some.call(sel.options, function (o) { return Number(o.value) === v; })) return;
+      var before = Array.prototype.find.call(sel.options, function (o) { return Number(o.value) > v; }) || null;
+      sel.add(new Option(fmtMin(v), v), before);
+    });
     startSel.value = s; endSel.value = e;
   }
   function renderMemberChecks(checkedIds, disabled) {
@@ -2152,8 +2155,38 @@
       box.appendChild(lb);
     });
   }
+  // ── 매주 반복 (일정 창 안에서) ──
+  function dowNum(date) { return Number(recurDateFor(date).slice(-1)); } // 월=1 … 일=7
+  function setRepeat(on, dows) {
+    el('fRepeat').checked = !!on;
+    var box = el('fDows');
+    box.innerHTML = '';
+    RECUR_DOW.forEach(function (d, i) {
+      var lb = document.createElement('label');
+      lb.className = 'chip';
+      lb.innerHTML = '<input type="checkbox" value="' + (i + 1) + '"' + (dows.indexOf(i + 1) >= 0 ? ' checked' : '') + ' />' + d;
+      box.appendChild(lb);
+    });
+    syncRepeat();
+  }
+  function syncRepeat() {
+    var on = el('fRepeat').checked;
+    el('fDows').style.display = on ? '' : 'none';
+    el('fRepHelp').style.display = on ? '' : 'none';
+  }
+  el('fRepeat').addEventListener('change', function () {
+    // 켤 때 요일을 하나도 안 골랐으면 보고 있는 날의 요일을 골라 둔다
+    if (el('fRepeat').checked && !document.querySelector('#fDows input:checked')) {
+      var b = document.querySelector('#fDows input[value="' + dowNum(state.date) + '"]');
+      if (b) b.checked = true;
+    }
+    syncRepeat();
+  });
+  var editingRecur = null; // 수정 중인 반복 규칙의 행들 (요일 × 대상)
+
   function openAddModal(memberId, startMin) {
-    editingGroup = null;
+    editingGroup = null; editingRecur = null;
+    setRepeat(false, [dowNum(state.date)]);
     el('entryModalTitle').textContent = '일정 추가';
     el('fTitle').value = ''; el('fMemo').value = '';
     fillTimeSelects(el('fStart'), el('fEnd'), startMin, Math.min(startMin + 60, DAY_END));
@@ -2162,7 +2195,8 @@
     showEntryModal();
   }
   function openAllModal() {
-    editingGroup = null;
+    editingGroup = null; editingRecur = null;
+    setRepeat(false, [dowNum(state.date)]);
     el('entryModalTitle').textContent = '전체 일정 추가';
     el('fTitle').value = ''; el('fMemo').value = '';
     fillTimeSelects(el('fStart'), el('fEnd'), 9 * 60, 10 * 60);
@@ -2171,7 +2205,8 @@
     showEntryModal();
   }
   function openMeetingModal(w) {
-    editingGroup = null;
+    editingGroup = null; editingRecur = null;
+    setRepeat(false, [dowNum(state.date)]);
     el('entryModalTitle').textContent = '회의 잡기';
     el('fTitle').value = '회의'; el('fMemo').value = '';
     fillTimeSelects(el('fStart'), el('fEnd'), w.start, w.end);
@@ -2182,7 +2217,8 @@
   }
   function openEditModal(group) {
     var g = Array.isArray(group) ? groupOf(group[0]) : groupOf(group); // 항상 최신 그룹으로
-    editingGroup = g;
+    editingGroup = g; editingRecur = null;
+    setRepeat(false, [dowNum(state.date)]);
     var e = g[0];
     el('entryModalTitle').textContent = g.length > 1
       ? (g.length === state.members.length ? '전체 일정 수정' : '공통 일정 수정 (' + g.length + '명)')
@@ -2210,20 +2246,50 @@
     if (!title) { err.textContent = '제목을 입력해 주세요.'; err.className = 'err show'; return; }
     if (e <= s) { err.textContent = '끝나는 시간이 시작 시간보다 늦어야 합니다.'; err.className = 'err show'; return; }
     if (!ids.length) { err.textContent = '대상을 한 명 이상 선택해 주세요.'; err.className = 'err show'; return; }
+    var repeat = el('fRepeat').checked;
+    var dows = Array.prototype.slice.call(document.querySelectorAll('#fDows input:checked'))
+      .map(function (c) { return Number(c.value); });
+    if (repeat && !dows.length) { err.textContent = '반복할 요일을 하나 이상 골라 주세요.'; err.className = 'err show'; return; }
 
     var memo = el('fMemo').value;
     var btn = el('fSave');
     btn.disabled = true; btn.textContent = '저장 중…';
     try {
-      // 수정 중이면 기존 사람은 그대로 갱신, 새로 고른 사람은 추가, 뺀 사람은 삭제
-      var old = {};
-      (editingGroup || []).forEach(function (x) { old[x.member_id] = x; });
-      for (var i = 0; i < ids.length; i++) {
-        await saveEntryRow({ id: old[ids[i]] ? old[ids[i]].id : uid() + i, date: state.date,
-          member_id: ids[i], start_min: s, end_min: e, title: title, memo: memo });
+      if (repeat) {
+        // 매주 반복: 요일 × 대상마다 규칙 한 줄. 모두 골랐으면 「전체」 한 줄(노란 띠)
+        var all = ids.length === state.members.length;
+        var mids = all ? [RECUR_ALL] : ids;
+        var oldR = {};
+        (editingRecur || []).forEach(function (x) { oldR[x.member_id + '|' + Number(x.date.slice(-1))] = x; });
+        var keep = {};
+        for (var a = 0; a < mids.length; a++) {
+          for (var b = 0; b < dows.length; b++) {
+            var k = mids[a] + '|' + dows[b], prev = oldR[k];
+            keep[k] = true;
+            await saveEntryRow({ id: prev ? prev.id : 'r' + uid() + a + '-' + dows[b], date: '1900-01-0' + dows[b],
+              member_id: mids[a], start_min: s, end_min: e, title: title, memo: memo });
+          }
+        }
+        var goneR = Object.keys(oldR).filter(function (k2) { return !keep[k2]; });
+        for (var c = 0; c < goneR.length; c++) await deleteEntryRow(oldR[goneR[c]].id, oldR[goneR[c]].date);
+        // 하루 일정을 반복으로 바꾼 경우 — 원래 그날 일정은 지운다
+        var gone1 = editingGroup || [];
+        for (var c2 = 0; c2 < gone1.length; c2++) await deleteEntryRow(gone1[c2].id);
+      } else {
+        // 수정 중이면 기존 사람은 그대로 갱신, 새로 고른 사람은 추가, 뺀 사람은 삭제
+        var old = {};
+        (editingGroup || []).forEach(function (x) { old[x.member_id] = x; });
+        for (var i = 0; i < ids.length; i++) {
+          await saveEntryRow({ id: old[ids[i]] ? old[ids[i]].id : uid() + i, date: state.date,
+            member_id: ids[i], start_min: s, end_min: e, title: title, memo: memo });
+        }
+        var dropped = Object.keys(old).filter(function (mid) { return ids.indexOf(mid) === -1; });
+        for (var d = 0; d < dropped.length; d++) await deleteEntryRow(old[dropped[d]].id);
+        // 반복 일정을 「이 날 하루만」으로 바꾼 경우 — 반복 규칙은 지운다
+        var goneRule = editingRecur || [];
+        for (var d2 = 0; d2 < goneRule.length; d2++) await deleteEntryRow(goneRule[d2].id, goneRule[d2].date);
       }
-      var dropped = Object.keys(old).filter(function (mid) { return ids.indexOf(mid) === -1; });
-      for (var d = 0; d < dropped.length; d++) await deleteEntryRow(old[dropped[d]].id);
+      editingGroup = null; editingRecur = null;
       closeEntryModal();
       await loadDay(true);
     } catch (ex) {
@@ -2250,71 +2316,13 @@
     setTimeout(function () { el('nName').focus(); }, 50);
   }
 
-  // ── 매주 반복 일정 관리 ──
-  // 수정 중인 반복 규칙 — 같은 제목·시간·대상의 요일별 행 묶음 (null이면 새로 추가)
-  var recurEditing = null;
-  function recurKey(e) { return [e.title, e.start_min, e.end_min, e.member_id].join('|'); }
-
-  function resetRecurForm() {
-    recurEditing = null;
-    var wrap = el('rDows');
-    wrap.innerHTML = '';
-    RECUR_DOW.forEach(function (d, i) {
-      var lb = document.createElement('label');
-      lb.className = 'chip';
-      lb.innerHTML = '<input type="checkbox" value="' + (i + 1) + '" />' + d;
-      wrap.appendChild(lb);
-    });
-    fillTimeSelects(el('rStart'), el('rEnd'), 10 * 60 + 30, 12 * 60);
-    var who = el('rWho');
-    who.innerHTML = '';
-    who.add(new Option('전체 (모든 팀원)', RECUR_ALL));
-    state.members.forEach(function (m) { who.add(new Option(m.name, m.id)); });
-    el('rTitle').value = '';
-    el('rErr').className = 'err';
-    el('rEditBar').style.display = 'none';
-    el('rCancelEdit').style.display = 'none';
-    el('rSave').textContent = '반복 일정 추가';
-  }
-
-  // 목록의 한 규칙을 폼에 불러와 수정 상태로 만든다
-  function startRecurEdit(g) {
-    resetRecurForm();
-    recurEditing = g;
-    var e = g[0];
-    el('rTitle').value = e.title;
-    g.forEach(function (x) {
-      var box = document.querySelector('#rDows input[value="' + Number(x.date.slice(-1)) + '"]');
-      if (box) box.checked = true;
-    });
-    fillTimeSelects(el('rStart'), el('rEnd'), e.start_min, e.end_min);
-    var who = el('rWho');
-    if (!Array.prototype.some.call(who.options, function (o) { return o.value === e.member_id; })) {
-      who.add(new Option(memberName(e.member_id), e.member_id)); // 명단에서 빠진 사람이어도 값은 지킨다
-    }
-    who.value = e.member_id;
-    el('rEditBar').textContent = '「' + e.title + '」 수정 중 — 고친 뒤 「수정 저장」을 누르세요';
-    el('rEditBar').style.display = '';
-    el('rCancelEdit').style.display = '';
-    el('rSave').textContent = '수정 저장';
-    setTimeout(function () { el('rTitle').focus(); }, 50);
-  }
-
-  // rule을 주면(표의 띠·블록을 누른 경우) 그 규칙을 바로 수정 상태로 연다
-  function openRecurModal(rule) {
-    resetRecurForm();
-    el('recurModalBg').classList.add('open');
-    renderRecurList(rule && rule.title ? recurKey(rule) : null);
-  }
-  function closeRecurModal() { el('recurModalBg').classList.remove('open'); }
-
+  // ── 매주 반복 일정 — 일정 창에서 수정 (2026-11-24: 별도 「반복 일정」 창을 없앰) ──
   // 규칙 전부 읽기 — 요일별 7개 날짜를 한 번에
   async function fetchAllRecur() {
     if (state.mode === 'server') {
       var reqs = [1, 2, 3, 4, 5, 6, 7].map(function (n) {
         return apiFetch(API + '?date=1900-01-0' + n)
-          .then(function (r) { return r.ok ? r.json() : { entries: [] }; })
-          .catch(function () { return { entries: [] }; });
+          .then(function (r) { if (!r.ok) throw new Error('recur'); return r.json(); });
       });
       var out = [];
       (await Promise.all(reqs)).forEach(function (j, i) {
@@ -2330,95 +2338,41 @@
     });
     return out2;
   }
-
-  async function renderRecurList(focusKey) {
-    var box = el('rList');
-    box.textContent = '불러오는 중…';
+  function recurDowText(rows) {
+    var seen = {};
+    rows.forEach(function (x) { seen[Number(x.date.slice(-1))] = true; });
+    return Object.keys(seen).map(Number).sort().map(function (n) { return RECUR_DOW[n - 1]; }).join('·');
+  }
+  // 표에서 누른 반복 일정 → 같은 규칙(같은 제목·시간이고, 반복 요일이 같은 대상들)을 모아 일정 창으로 연다
+  async function openRecurEdit(clicked) {
+    if (state.mode === 'offline') { alert('지금은 인터넷 연결이 없어 볼 수만 있습니다.'); return; }
+    var ruleId = clicked.recur || clicked.id;
     var rows;
     try { rows = await fetchAllRecur(); }
-    catch (e) { box.textContent = '반복 일정을 불러오지 못했습니다.'; return; }
-    if (!rows.length) { box.textContent = '등록된 반복 일정이 없습니다.'; return; }
-    // 같은 제목·시간·대상 = 하나의 규칙으로 묶어 요일을 모아 보여준다
-    var byRule = {};
-    rows.forEach(function (e) {
-      var k = [e.title, e.start_min, e.end_min, e.member_id].join('|');
-      (byRule[k] = byRule[k] || []).push(e);
+    catch (ex) { alert('반복 일정을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'); return; }
+    var base = rows.find(function (x) { return x.id === ruleId; });
+    if (!base) { alert('이 반복 일정은 그 사이 바뀌었거나 삭제되었습니다.'); await loadDay(true); return; }
+    var same = rows.filter(function (x) {
+      return x.title === base.title && x.start_min === base.start_min && x.end_min === base.end_min;
     });
-    box.innerHTML = '';
-    var editKey = recurEditing ? recurKey(recurEditing[0]) : null;
-    Object.keys(byRule).sort().forEach(function (k) {
-      var g = byRule[k].sort(function (a, b) { return a.date < b.date ? -1 : 1; });
-      var e = g[0];
-      var dows = g.map(function (x) { return RECUR_DOW[Number(x.date.slice(-1)) - 1]; }).join('·');
-      var who = e.member_id === RECUR_ALL ? '전체' : memberName(e.member_id);
-      var row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(0,0,0,.06)' +
-        (k === editKey ? ';background:rgba(233,196,106,.14);border-radius:8px;padding-left:8px' : '');
-      row.innerHTML = '<span style="flex:1;min-width:0"><b>' + esc(dows) + '</b> ' +
-        fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + ' · ' + esc(e.title) +
-        ' <span style="opacity:.65">(' + esc(who) + ')</span></span>';
-      var ed = document.createElement('button');
-      ed.className = 'btn';
-      ed.style.cssText = 'padding:4px 10px;font-size:12px';
-      ed.textContent = '수정';
-      ed.addEventListener('click', function () { startRecurEdit(g); renderRecurList(); });
-      row.appendChild(ed);
-      var del = document.createElement('button');
-      del.className = 'btn danger';
-      del.style.cssText = 'padding:4px 10px;font-size:12px';
-      del.textContent = '삭제';
-      del.addEventListener('click', async function () {
-        if (!confirm('「' + e.title + '」 반복 일정을 삭제할까요?\n(' + dows + ' ' +
-          fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + ')')) return;
-        del.disabled = true;
-        try {
-          for (var i = 0; i < g.length; i++) await deleteEntryRow(g[i].id, g[i].date);
-          if (recurEditing && recurKey(recurEditing[0]) === k) resetRecurForm(); // 수정 중이던 것을 지웠다
-          await loadDay(true);
-          renderRecurList();
-        } catch (ex) {
-          alert(writeErrMsg(ex, '삭제하지 못했습니다. 다시 시도해 주세요.'));
-          del.disabled = false;
-        }
-      });
-      row.appendChild(del);
-      box.appendChild(row);
-      if (focusKey && k === focusKey) { focusKey = null; startRecurEdit(g); row.style.cssText += ';background:rgba(233,196,106,.14);border-radius:8px;padding-left:8px'; }
-    });
-  }
+    var dowsOf = {};
+    same.forEach(function (x) { (dowsOf[x.member_id] = dowsOf[x.member_id] || []).push(Number(x.date.slice(-1))); });
+    Object.keys(dowsOf).forEach(function (m) { dowsOf[m] = dowsOf[m].sort().join(','); });
+    var g = same.filter(function (x) { return dowsOf[x.member_id] === dowsOf[base.member_id]; });
 
-  async function submitRecur() {
-    var title = el('rTitle').value.trim();
-    var sMin = Number(el('rStart').value), eMin = Number(el('rEnd').value);
-    var dows = Array.prototype.slice.call(document.querySelectorAll('#rDows input:checked'))
-      .map(function (c) { return Number(c.value); });
-    var err = el('rErr');
-    if (!title) { err.textContent = '제목을 입력해 주세요.'; err.className = 'err show'; return; }
-    if (!dows.length) { err.textContent = '요일을 하나 이상 선택해 주세요.'; err.className = 'err show'; return; }
-    if (eMin <= sMin) { err.textContent = '끝나는 시간이 시작 시간보다 늦어야 합니다.'; err.className = 'err show'; return; }
-    err.className = 'err';
-    var btn = el('rSave');
-    var editing = recurEditing;
-    btn.disabled = true; btn.textContent = '저장 중…';
-    try {
-      var old = {};                                   // 요일 번호 → 기존 행 (수정일 때만)
-      (editing || []).forEach(function (x) { old[Number(x.date.slice(-1))] = x; });
-      for (var i = 0; i < dows.length; i++) {
-        await saveEntryRow({ id: old[dows[i]] ? old[dows[i]].id : 'r' + uid() + dows[i],
-          date: '1900-01-0' + dows[i], member_id: el('rWho').value,
-          start_min: sMin, end_min: eMin, title: title, memo: '' });
-      }
-      var dropped = Object.keys(old).filter(function (n) { return dows.indexOf(Number(n)) === -1; });
-      for (var d = 0; d < dropped.length; d++) await deleteEntryRow(old[dropped[d]].id, old[dropped[d]].date);
-      resetRecurForm();
-      await loadDay(true);
-      renderRecurList();
-    } catch (ex) {
-      err.textContent = writeErrMsg(ex, '저장에 실패했습니다. 네트워크를 확인하고 다시 시도해 주세요.');
-      err.className = 'err show';
-      btn.textContent = editing ? '수정 저장' : '반복 일정 추가';
-    }
-    btn.disabled = false;
+    editingGroup = null; editingRecur = g;
+    var mids = {};
+    g.forEach(function (x) { mids[x.member_id] = true; });
+    var checked = mids[RECUR_ALL] ? state.members.map(function (m) { return m.id; })
+      : state.members.filter(function (m) { return mids[m.id]; }).map(function (m) { return m.id; });
+    el('entryModalTitle').textContent = '매주 반복 일정 수정';
+    el('fTitle').value = base.title; el('fMemo').value = base.memo || '';
+    fillTimeSelects(el('fStart'), el('fEnd'), base.start_min, base.end_min);
+    renderMemberChecks(checked, false);
+    setRepeat(true, dowsOf[base.member_id].split(',').map(Number));
+    el('fDelete').style.display = '';
+    el('fDelete').textContent = '반복 일정 삭제';
+    showEntryModal();
   }
 
   // ── 월간 달력 (2026-11-19 요청) — 날짜를 누르면 한 달을 펼쳐 고른다 ──
@@ -2635,13 +2589,7 @@
     });
   }
   autoEndHour(el('fStart'), el('fEnd'));
-  autoEndHour(el('rStart'), el('rEnd'));
   el('allAddBtn').addEventListener('click', openAllModal);
-  el('recurBtn').addEventListener('click', function () { openRecurModal(); });
-  el('rCancelEdit').addEventListener('click', function () { resetRecurForm(); renderRecurList(); });
-  el('rSave').addEventListener('click', submitRecur);
-  el('rClose').addEventListener('click', closeRecurModal);
-  el('recurModalBg').addEventListener('click', function (ev) { if (ev.target === ev.currentTarget) closeRecurModal(); });
   el('meetToggle').addEventListener('click', function () {
     state.meetOpen = !state.meetOpen;
     renderMeetPanel(); renderBoard();
@@ -2653,6 +2601,18 @@
   el('fCancel').addEventListener('click', closeEntryModal);
   el('entryModalBg').addEventListener('click', function (ev) { if (ev.target === ev.currentTarget) closeEntryModal(); });
   el('fDelete').addEventListener('click', async function () {
+    if (editingRecur && editingRecur.length) {
+      var rr0 = editingRecur[0];
+      if (!confirm('「' + rr0.title + '」 매주 반복 일정을 삭제할까요?\n(' + recurDowText(editingRecur) + ' ' +
+        fmtMin(rr0.start_min) + '~' + fmtMin(rr0.end_min) + ') 모든 주에서 사라집니다.')) return;
+      try {
+        for (var j = 0; j < editingRecur.length; j++) await deleteEntryRow(editingRecur[j].id, editingRecur[j].date);
+        editingRecur = null;
+        closeEntryModal();
+        await loadDay(true);
+      } catch (ex) { alert(writeErrMsg(ex, '삭제에 실패했습니다. 다시 시도해 주세요.')); }
+      return;
+    }
     var g = editingGroup || [];
     if (!g.length) return;
     if (!confirm(g.length > 1
@@ -3025,8 +2985,13 @@
   }
 
   function makeDayImage() {
-    var members = state.members;
-    var entries = dayEntries();
+    // 주간 보기면 열 = 월~일 (그 팀원의 일주일), 아니면 열 = 팀원
+    var wk = state.weekMode ? state.week : null, wm = wk ? weekMember() : null;
+    var members = wk ? wk.days.map(function (d, i) {
+      return { id: d.date, name: RECUR_DOW[i] + ' ' + Number(d.date.slice(5, 7)) + '/' + Number(d.date.slice(8)),
+        color: d.date === todayStr() ? '#C9AE78' : 'rgba(255,255,255,.25)' };
+    }) : state.members;
+    var entries = wk ? [] : dayEntries();
     var FONT = '-apple-system, "Noto Sans KR", "Malgun Gothic", sans-serif';
 
     // 시간 범위: 화면과 같은 하루 전체(06:00~24:00)를 담는다 — 일정 유무로 잘라내면
@@ -3057,9 +3022,15 @@
     ctx.fillStyle = '#1E3A50';
     ctx.font = '900 21px ' + FONT;
     ctx.textBaseline = 'middle';
-    ctx.fillText((state.auth ? state.auth.name + ' · ' : '') +
-      p[0] + '년 ' + Number(p[1]) + '월 ' + Number(p[2]) + '일 (' + dowKo(state.date) + ') 팀 일정',
-      pad, pad + 24);
+    var headTitle;
+    if (wk) {
+      var a1 = wk.days[0].date.split('-'), a2 = wk.days[6].date.split('-');
+      headTitle = (wm ? wm.name + ' 주간 일정 · ' : '주간 일정 · ') + a1[0] + '년 ' + Number(a1[1]) + '월 ' + Number(a1[2]) + '일 ~ ' +
+        (a1[1] === a2[1] ? '' : Number(a2[1]) + '월 ') + Number(a2[2]) + '일';
+    } else {
+      headTitle = p[0] + '년 ' + Number(p[1]) + '월 ' + Number(p[2]) + '일 (' + dowKo(state.date) + ') 팀 일정';
+    }
+    ctx.fillText(ellipsize(ctx, (state.auth ? state.auth.name + ' · ' : '') + headTitle, W - pad * 2 - 190), pad, pad + 24);
     ctx.font = '500 12px ' + FONT;
     ctx.fillStyle = '#A9884F';
     ctx.textAlign = 'right';
@@ -3087,12 +3058,19 @@
       ctx.fillRect(gx + colW * i + 6, pad + titleH + headH - 5, colW - 12, 3);
     });
 
-    // 전체 반복 일정 — 노란 띠 배경
-    (state.recur || []).filter(function (e) { return e.member_id === RECUR_ALL; }).forEach(function (e) {
-      var rs = Math.max(e.start_min, from), re2 = Math.min(e.end_min, to);
+    // 전체 반복 일정 — 노란 띠 배경 (주간이면 그 요일 열에만)
+    var allBands = [];
+    if (wk) wk.days.forEach(function (d, i) {
+      (d.recur || []).filter(function (e) { return e.member_id === RECUR_ALL; })
+        .forEach(function (e) { allBands.push({ e: e, x: gx + colW * i, w: colW }); });
+    });
+    else (state.recur || []).filter(function (e) { return e.member_id === RECUR_ALL; })
+      .forEach(function (e) { allBands.push({ e: e, x: gx, w: gw }); });
+    allBands.forEach(function (bd) {
+      var e = bd.e, rs = Math.max(e.start_min, from), re2 = Math.min(e.end_min, to);
       if (re2 <= rs) return;
       ctx.fillStyle = 'rgba(233,196,106,.18)';
-      ctx.fillRect(gx, yOf(rs), gw, yOf(re2) - yOf(rs));
+      ctx.fillRect(bd.x, yOf(rs), bd.w, yOf(re2) - yOf(rs));
     });
 
     // 눈금
@@ -3152,8 +3130,24 @@
       ctx.restore();
     }
 
+    // 주간: 날짜 열마다 그 팀원의 일정 + 개인 반복 일정
+    if (wk && wm) wk.days.forEach(function (d, i) {
+      var counts = {};
+      (d.entries || []).forEach(function (e) { counts[groupKey(e)] = (counts[groupKey(e)] || 0) + 1; });
+      var list = (d.entries || []).filter(function (e) { return e.member_id === wm.id; })
+        .concat((d.recur || []).filter(function (r) { return r.member_id === wm.id; })
+          .map(function (r) { return Object.assign({}, r, { recur: r.id }); }));
+      layoutOverlaps(list).forEach(function (pl) {
+        var w = (colW - 8) / pl.of, n = pl.e.recur ? 0 : counts[groupKey(pl.e)];
+        drawBlock(gx + colW * i + 4 + w * pl.lane, w - (pl.of > 1 ? 2 : 0),
+          pl.e.start_min, pl.e.end_min, pl.e.recur ? '#D9A62E' : (wm.color || '#3E6288'),
+          pl.e.title, fmtMin(pl.e.start_min) + '~' + fmtMin(pl.e.end_min),
+          n > 1 ? (n === state.members.length ? '전원' : n + '명') : null);
+      });
+    });
+
     // 공통 일정(막대) + 개인 일정 — 화면과 같은 규칙으로
-    var bands = groupBands(members, entries);
+    var bands = wk ? [] : groupBands(members, entries);
     var inBand = {};
     bands.forEach(function (b) { b.group.forEach(function (e) { inBand[e.id] = true; }); });
     members.forEach(function (m, i) {
@@ -3174,19 +3168,19 @@
     });
 
     // 전체 반복 일정 라벨 — 띠 가운데에 알약 모양으로
-    (state.recur || []).filter(function (e) { return e.member_id === RECUR_ALL; }).forEach(function (e) {
-      var rs = Math.max(e.start_min, from), re2 = Math.min(e.end_min, to);
+    allBands.forEach(function (bd) {
+      var e = bd.e, rs = Math.max(e.start_min, from), re2 = Math.min(e.end_min, to);
       if (re2 <= rs) return;
       ctx.font = '700 11px ' + FONT;
-      var label = '\ub9e4\uc8fc \u00B7 ' + e.title + ' ' + fmtMin(e.start_min) + '~' + fmtMin(e.end_min);
+      var label = ellipsize(ctx, (wk ? '' : '\ub9e4\uc8fc \u00B7 ') + e.title + ' ' + fmtMin(e.start_min) + '~' + fmtMin(e.end_min), bd.w - 26);
       var lw = ctx.measureText(label).width + 20;
-      var ly = (yOf(rs) + yOf(re2)) / 2;
+      var ly = (yOf(rs) + yOf(re2)) / 2, cx = bd.x + bd.w / 2;
       ctx.fillStyle = 'rgba(255,251,240,.88)';
-      rr(ctx, gx + gw / 2 - lw / 2, ly - 9, lw, 18, 9);
+      rr(ctx, cx - lw / 2, ly - 9, lw, 18, 9);
       ctx.fill();
       ctx.fillStyle = '#A9821E';
       ctx.textAlign = 'center';
-      ctx.fillText(label, gx + gw / 2, ly + 1);
+      ctx.fillText(label, cx, ly + 1);
       ctx.textAlign = 'left';
     });
 
@@ -3203,6 +3197,7 @@
 
   async function copyDayImage() {
     var btn = el('copyBtn');
+    if (state.weekMode && (!state.week || state.week.start !== weekStart(state.date))) { showToast('주간 일정을 불러오는 중입니다.<br>잠시 후 다시 눌러 주세요.'); return; }
     btn.disabled = true;
     var oldText = btn.innerHTML;
     btn.querySelector('.lb').textContent = '만드는 중…';
@@ -3211,7 +3206,7 @@
       var blobPromise = new Promise(function (res, rej) {
         cv.toBlob(function (b) { b ? res(b) : rej(new Error('blob')); }, 'image/png');
       });
-      var fname = 'schedule_' + state.date + '.png';
+      var fname = state.weekMode ? 'schedule_week_' + state.week.start + '.png' : 'schedule_' + state.date + '.png';
 
       // 휴대폰: 공유 시트에서 카톡·텔레그램을 바로 고를 수 있게
       if (document.body.classList.contains('touch') && navigator.canShare) {

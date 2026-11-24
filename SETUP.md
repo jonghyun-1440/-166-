@@ -90,7 +90,7 @@ alter table schedule_entries add column if not exists cohort_id text not null de
 create index if not exists schedule_entries_cohort_date_idx on schedule_entries (cohort_id, date);
 ```
 
-비밀번호를 잊었을 때를 대비하려면 Vercel 환경변수에 `ADMIN_PIN`(관리자 비밀번호)을 추가하고 Redeploy 하세요.
+비밀번호를 잊었을 때를 대비하려면 Vercel 환경변수에 `ADMIN_PIN`(관리자 비밀번호, 8자리 이상 권장)을 추가하고 Redeploy 하세요.
 
 ---
 
