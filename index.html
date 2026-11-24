@@ -298,15 +298,93 @@
   @media (max-width: 640px) {
     .brand .name { display: none; }
   }
+  /* ── 기수 입장 화면 (2026-11-24) ── */
+  .gate { position: fixed; inset: 0; z-index: 100; overflow-y: auto; display: none;
+    background: linear-gradient(180deg, var(--navy-3) 0, var(--navy-3) 210px, #F3F5F8 210px); }
+  .gate.open { display: block; }
+  .gate-top { text-align: center; color: #fff; padding: 34px 16px 0; }
+  .gate-top .t1 { font-size: 22px; font-weight: 900; letter-spacing: -.01em; }
+  .gate-top .t2 { font-size: 12.5px; color: var(--gold); margin-top: 4px; letter-spacing: .08em; }
+  .gate-card { background: #fff; width: calc(100% - 28px); max-width: 420px; margin: 26px auto 40px; border-radius: 18px;
+    box-shadow: 0 14px 40px rgba(20,34,48,.18); padding: 24px 20px 22px; }
+  .gate-card h2 { margin: 0 0 4px; font-size: 19px; color: var(--deep); text-align: center; }
+  .gate-card .gsub { text-align: center; font-size: 13.5px; color: var(--muted); margin-bottom: 18px; line-height: 1.5; }
+  .gate-back { border: 0; background: none; color: var(--navy-1); font-size: 14px; font-weight: 700; padding: 4px 0; margin-bottom: 8px; }
+  .g-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .g-big { border: 1px solid var(--line); background: #fff; border-radius: 14px; padding: 16px 10px; font-size: 18px;
+    font-weight: 800; color: var(--deep); text-align: center; }
+  .g-big:hover { background: var(--soft); border-color: var(--navy-1); }
+  .g-big small { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-top: 3px; }
+  .g-big.new { border-style: dashed; color: var(--brass); }
+  .g-list { display: grid; gap: 8px; }
+  .g-empty { text-align: center; color: var(--muted); font-size: 14px; padding: 10px 0 14px; }
+  .pin-dots { display: flex; justify-content: center; gap: 16px; margin: 6px 0 10px; }
+  .pin-dots i { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--navy-2); }
+  .pin-dots i.on { background: var(--navy-2); }
+  .pin-dots.shake { animation: gshake .35s; }
+  @keyframes gshake { 20%,60% { transform: translateX(-8px); } 40%,80% { transform: translateX(8px); } }
+  .g-msg { min-height: 20px; text-align: center; font-size: 13.5px; font-weight: 700; color: #C0473F; margin-bottom: 8px; }
+  .g-msg.ok { color: var(--muted); font-weight: 600; }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 300px; margin: 0 auto; }
+  .keypad button { height: 60px; border-radius: 14px; border: 1px solid var(--line); background: #fff; font-size: 24px;
+    font-weight: 700; color: var(--deep); touch-action: manipulation; }
+  .keypad button:active { background: var(--soft); }
+  .keypad button.fn { font-size: 15px; color: var(--muted); border-color: transparent; background: transparent; }
+  .g-link { display: block; margin: 14px auto 0; border: 0; background: none; color: var(--navy-1); font-size: 13px; text-decoration: underline; }
+  .g-field { display: flex; align-items: center; gap: 8px; justify-content: center; margin: 4px 0 14px; }
+  .g-field input { width: 120px; font-size: 26px; font-weight: 800; text-align: center; padding: 10px; border: 1px solid var(--line);
+    border-radius: 12px; color: var(--deep); }
+  .g-field span { font-size: 22px; font-weight: 800; color: var(--deep); }
+  .g-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-bottom: 14px; }
+  .g-chips button { border: 1px solid var(--line); background: #fff; border-radius: 99px; padding: 8px 14px; font-size: 15px; font-weight: 700; color: var(--muted); }
+  .g-chips button.on { background: var(--navy-2); border-color: var(--navy-2); color: #fff; }
+  .g-primary { width: 100%; border: 0; border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 800; background: var(--navy-2); color: #fff; }
+  .g-primary:disabled { opacity: .45; }
+  .g-input { width: 100%; box-sizing: border-box; font-size: 16px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; }
+  .cohort-chip { border: 1px solid rgba(169,136,79,.5); background: #FBF6EA; color: #8A6A17; border-radius: 99px; padding: 4px 11px;
+    font-size: 12.5px; font-weight: 800; margin-left: 8px; display: none; }
+  .cohort-chip.show { display: inline-block; }
 </style>
 </head>
 <body>
+<div class="gate" id="gate" aria-modal="true" role="dialog">
+  <div class="gate-top"><div class="t1">팀 일정 공유</div><div class="t2">DAILY TIMETABLE</div></div>
+  <div class="gate-card" id="gateCard"></div>
+</div>
+
+<!-- 기수 설정 -->
+<div class="modal-bg" id="cohortModalBg">
+  <div class="modal" style="max-width: 440px">
+    <h3 id="cmTitle">기수 설정</h3>
+    <div class="xl-sec">
+      <div class="xl-t">다른 기수로 가기</div>
+      <button class="btn" id="cmSwitch" style="width:100%">기수 바꾸기 (이 기기에서 나가기)</button>
+    </div>
+    <div class="xl-sec">
+      <div class="xl-t">비밀번호 바꾸기</div>
+      <input class="g-input" id="cmPinNow" type="password" inputmode="numeric" maxlength="4" placeholder="지금 비밀번호 4자리" autocomplete="off" />
+      <input class="g-input" id="cmPinNew" type="password" inputmode="numeric" maxlength="4" placeholder="새 비밀번호 4자리" autocomplete="off" />
+      <input class="g-input" id="cmPinNew2" type="password" inputmode="numeric" maxlength="4" placeholder="새 비밀번호 한 번 더" autocomplete="off" />
+      <button class="btn primary" id="cmPinSave" style="width:100%">비밀번호 바꾸기</button>
+      <div class="xl-help">바꾸면 다른 기기들은 새 비밀번호로 다시 들어와야 합니다.</div>
+    </div>
+    <div class="xl-sec">
+      <div class="xl-t">기수 삭제</div>
+      <input class="g-input" id="cmDelPin" type="password" inputmode="numeric" maxlength="4" placeholder="지금 비밀번호 4자리" autocomplete="off" />
+      <button class="btn danger" id="cmDelete" style="width:100%">이 기수와 모든 일정 삭제</button>
+    </div>
+    <div class="err" id="cmErr"></div>
+    <div class="btns"><button class="btn" id="cmClose">닫기</button></div>
+  </div>
+</div>
+
 <div class="top-accent"></div>
 
 <header class="bar">
   <div class="bar-in">
     <div class="brand">
       <span class="name">팀 일정 공유</span><span class="sub">Daily Timetable</span>
+      <button class="cohort-chip" id="cohortChip" title="기수 설정 · 기수 바꾸기"></button>
     </div>
     <div class="date-nav">
       <button class="nav-btn" id="prevDay" title="이전 날">◀</button>
@@ -588,7 +666,10 @@
   }
   function localSave(db) { localStorage.setItem(LS_KEY, JSON.stringify(db)); }
   // 서버에서 받은 하루치를 보관 — 오프라인일 때 이걸 보여준다(최근 14일치만 유지)
+  // 기수 모드에서는 오프라인 보관도 기수마다 따로 — 다른 기수 일정이 섞여 보이지 않게
+  function ck(d) { return state.auth ? state.auth.id + '|' + d : d; }
   function cacheDay(date, members, entries) {
+    date = ck(date);
     try {
       var db = localLoad();
       db.cache = db.cache || {};
@@ -599,11 +680,13 @@
     } catch (e) { /* 저장 공간이 없으면 무시 */ }
   }
   function cachedDay(date) {
+    date = ck(date);
     var db = localLoad();
     return (db.cache && db.cache[date]) || null;
   }
   // 반복 규칙은 요일별 7건뿐이라 날짜 캐시와 따로 보관한다 (14일 정리에 밀려나지 않게)
   function cacheRecur(recurDate, rows) {
+    recurDate = ck(recurDate);
     try {
       var db = localLoad();
       (db.recurCache = db.recurCache || {})[recurDate] = rows;
@@ -611,6 +694,7 @@
     } catch (e) { /* 저장 공간이 없으면 무시 */ }
   }
   function cachedRecur(recurDate) {
+    recurDate = ck(recurDate);
     var db = localLoad();
     return (db.recurCache && db.recurCache[recurDate]) || [];
   }
@@ -627,13 +711,338 @@
     return colors.map(function (c, i) { return { id: 'm' + (i + 1), name: '팀원 ' + (i + 1), color: c, sort: i + 1 }; });
   }
 
+  // ── 기수 로그인 (2026-11-24) ──
+  // 서버에 기수 표가 있으면 「기수 모드」: 지역 → 기수 → 비밀번호 4자리로 들어가고,
+  // 받은 출입증을 이 기기에 30일 기억한다. 표가 없으면 종전처럼 로그인 없이 동작한다.
+  var AUTH_KEY = 'mlk-sched-auth';
+  function authLoad() {
+    try {
+      var a = JSON.parse(localStorage.getItem(AUTH_KEY));
+      return a && a.token && a.exp > Date.now() ? a : null;
+    } catch (e) { return null; }
+  }
+  function authSave(token, cohort) {
+    state.auth = { token: token, id: cohort.id, name: cohort.name, exp: Date.now() + 29 * 864e5 };
+    try { localStorage.setItem(AUTH_KEY, JSON.stringify(state.auth)); } catch (e) {}
+  }
+  function authClear() {
+    state.auth = null;
+    try { localStorage.removeItem(AUTH_KEY); } catch (e) {}
+  }
+  async function apiFetch(url, opts) {
+    opts = opts || {};
+    if (state.auth) opts.headers = Object.assign({}, opts.headers || {}, { 'X-Cohort-Token': state.auth.token });
+    var r = await fetch(url, opts);
+    if (r.status === 401 && state.cohortMode) {
+      var j = null;
+      try { j = await r.clone().json(); } catch (e) {}
+      if (j && j.error === 'auth') {
+        authClear();
+        showGate(j.reason === 'pin-changed' ? '기수 비밀번호가 바뀌었습니다. 새 비밀번호로 들어와 주세요.'
+          : j.reason === 'gone' ? '이 기수가 삭제되었습니다.' : '');
+      }
+    }
+    return r;
+  }
+  function gateOpen() { return el('gate').classList.contains('open'); }
+  function applyCohortUI() {
+    var chip = el('cohortChip');
+    if (state.cohortMode && state.auth) {
+      chip.textContent = state.auth.name + ' ▾';
+      chip.classList.add('show');
+      document.title = state.auth.name + ' · 팀 일정 공유';
+    } else {
+      chip.classList.remove('show');
+      document.title = '팀 일정 공유';
+    }
+  }
+
+  async function boot() {
+    state.auth = authLoad();
+    try {
+      var r = await fetch(API + '?cohorts=1');
+      if (r.ok) {
+        var j = await r.json();
+        if (j.mode === 'cohort') {
+          state.cohortMode = true;
+          state.gateInfo = j;
+          var mine = state.auth && j.cohorts.some(function (c) { return c.id === state.auth.id; });
+          if (!mine) { authClear(); showGate(); return; }
+        }
+      }
+    } catch (e) {
+      if (state.auth) state.cohortMode = true; // 오프라인 — 기억해 둔 기수로 보관된 일정을 보여준다
+    }
+    applyCohortUI();
+    loadDay();
+  }
+
+  // ── 입장 화면 ──
+  var gate = { step: 'region', region: null, cohort: null, buf: '', first: null, num: '', msg: '', msgOk: false };
+  var gateCountdown = null;
+  async function refreshGateInfo() {
+    try {
+      var r = await fetch(API + '?cohorts=1');
+      if (r.ok) state.gateInfo = await r.json();
+    } catch (e) {}
+  }
+  async function showGate(msg) {
+    closeEntryModal(); closeTeamModal(); closeCal();
+    ['nameModalBg', 'xlModalBg', 'recurModalBg', 'cohortModalBg'].forEach(function (id) { el(id).classList.remove('open'); });
+    el('gate').classList.add('open');
+    applyCohortUI();
+    gate = { step: 'region', region: null, cohort: null, buf: '', first: null, num: '', msg: msg || '', msgOk: !!msg };
+    el('gateCard').innerHTML = '<div class="g-empty">기수 목록을 불러오는 중…</div>';
+    await refreshGateInfo();
+    // QR·주소로 기수가 정해져 들어온 경우 (?c=musil-166) — 바로 비밀번호 화면
+    var want = new URLSearchParams(location.search).get('c');
+    var info = state.gateInfo || { cohorts: [], regions: [] };
+    var hit = want && info.cohorts.find(function (c) { return c.id === want; });
+    if (hit) { gate.region = hit.region; gatePickCohort(hit); return; }
+    if (info.regions && info.regions.length === 1) gate.region = info.regions[0];
+    gate.step = gate.region ? 'list' : 'region';
+    renderGate();
+  }
+  function hideGate() { el('gate').classList.remove('open'); clearInterval(gateCountdown); }
+  function gateGo(step, extra) {
+    Object.assign(gate, { step: step, buf: '', msg: '', msgOk: false }, extra || {});
+    renderGate();
+  }
+  function gatePickCohort(c) {
+    gate.cohort = c;
+    if (c.hasPin) gateGo('pin');
+    else gateGo('set1', { first: null });
+  }
+  function gateMsg(text, ok) { gate.msg = text; gate.msgOk = !!ok; var m = el('gMsg'); if (m) { m.textContent = text; m.className = 'g-msg' + (ok ? ' ok' : ''); } }
+  function gateShake() { var d = el('gDots'); if (d) { d.classList.remove('shake'); void d.offsetWidth; d.classList.add('shake'); } }
+
+  function renderGate() {
+    var c = el('gateCard'), info = state.gateInfo || { cohorts: [], regions: [] }, h = '';
+    var back = function (label) { return '<button class="gate-back" data-act="back">‹ ' + label + '</button>'; };
+    if (gate.step === 'region') {
+      h += '<h2>어느 지역인가요?</h2><div class="gsub">지역을 고르면 그 지역의 기수가 나옵니다</div><div class="g-grid">';
+      (info.regions || []).forEach(function (r) {
+        var n = info.cohorts.filter(function (x) { return x.region === r; }).length;
+        h += '<button class="g-big" data-region="' + esc(r) + '">' + esc(r) + '<small>' + (n ? '기수 ' + n + '개' : '아직 없음') + '</small></button>';
+      });
+      h += '</div>';
+    } else if (gate.step === 'list') {
+      var list = info.cohorts.filter(function (x) { return x.region === gate.region; })
+        .sort(function (a, b) { return b.num - a.num; });
+      h += back('지역 다시 고르기') + '<h2>' + esc(gate.region) + '</h2><div class="gsub">기수를 고르세요</div><div class="g-list">';
+      if (!list.length) h += '<div class="g-empty">아직 만든 기수가 없습니다</div>';
+      list.forEach(function (x) {
+        h += '<button class="g-big" data-cohort="' + esc(x.id) + '">' + esc(x.name) +
+          (x.hasPin ? '' : '<small>처음 들어가요 — 비밀번호를 정합니다</small>') + '</button>';
+      });
+      h += '<button class="g-big new" data-act="new">＋ 새 기수 만들기</button></div>';
+    } else if (gate.step === 'pin' || gate.step === 'set1' || gate.step === 'set2' || gate.step === 'new1' || gate.step === 'new2') {
+      var nm = gate.step.indexOf('new') === 0 ? gate.region + ' ' + gate.num + '기' : gate.cohort.name;
+      var title = { pin: '비밀번호 4자리', set1: '비밀번호를 정하세요', set2: '한 번 더 눌러 주세요',
+        new1: '비밀번호를 정하세요', new2: '한 번 더 눌러 주세요' }[gate.step];
+      var sub = { pin: '', set1: '처음 들어오는 기수입니다. 기수 사람들과 함께 쓸 4자리를 정하세요',
+        set2: '방금 정한 4자리를 확인합니다', new1: '기수 사람들과 함께 쓸 4자리를 정하세요',
+        new2: '방금 정한 4자리를 확인합니다' }[gate.step];
+      h += back(gate.step.indexOf('new') === 0 ? '기수 번호 다시 입력' : '기수 다시 고르기') +
+        '<h2>' + esc(nm) + '</h2><div class="gsub">' + title + (sub ? '<br>' + sub : '') + '</div>' +
+        '<div class="pin-dots" id="gDots">' + [0, 1, 2, 3].map(function (i) { return '<i' + (i < gate.buf.length ? ' class="on"' : '') + '></i>'; }).join('') + '</div>' +
+        '<div class="g-msg' + (gate.msgOk ? ' ok' : '') + '" id="gMsg">' + esc(gate.msg) + '</div><div class="keypad">';
+      ['1', '2', '3', '4', '5', '6', '7', '8', '9'].forEach(function (k) { h += '<button data-key="' + k + '">' + k + '</button>'; });
+      h += '<button class="fn" data-act="clear">지우기</button><button data-key="0">0</button><button class="fn" data-key="del">⌫</button></div>';
+      if (gate.step === 'pin') h += '<button class="g-link" data-act="forgot">비밀번호를 잊었어요</button>';
+    } else if (gate.step === 'new') {
+      h += back('기수 목록') + '<h2>새 기수 만들기</h2><div class="gsub">지역을 고르고 기수 번호(숫자)를 적으세요</div><div class="g-chips">';
+      (info.regions || []).forEach(function (r) {
+        h += '<button data-pickregion="' + esc(r) + '" class="' + (r === gate.region ? 'on' : '') + '">' + esc(r) + '</button>';
+      });
+      h += '</div><div class="g-field"><input id="gNum" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="166" value="' +
+        esc(gate.num) + '" autocomplete="off" /><span>기</span></div>' +
+        '<div class="g-msg' + (gate.msgOk ? ' ok' : '') + '" id="gMsg">' + esc(gate.msg) + '</div>' +
+        '<button class="g-primary" id="gNext">다음 — 비밀번호 정하기</button>';
+    } else if (gate.step === 'forgot') {
+      h += back('비밀번호 다시 누르기') + '<h2>비밀번호를 잊으셨나요?</h2>' +
+        '<div class="gsub">기수를 만든 분이나 같은 기수 분께 물어보세요.' +
+        (info.adminEnabled ? '<br>관리자라면 아래에서 새 비밀번호로 바꿀 수 있습니다.' : '') + '</div>';
+      if (info.adminEnabled) {
+        h += '<input class="g-input" id="gAdmin" type="password" placeholder="관리자 비밀번호" autocomplete="off" />' +
+          '<input class="g-input" id="gNewPin" type="password" inputmode="numeric" maxlength="4" placeholder="이 기수의 새 비밀번호 4자리" autocomplete="off" />' +
+          '<div class="g-msg" id="gMsg"></div><button class="g-primary" id="gReset">비밀번호 재설정</button>';
+      }
+    }
+    c.innerHTML = h;
+    var num = el('gNum');
+    if (num) {
+      num.addEventListener('input', function () { num.value = num.value.replace(/\D/g, '').slice(0, 4); gate.num = num.value; });
+      num.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') gateNewNext(); });
+      setTimeout(function () { num.focus(); }, 50);
+    }
+  }
+
+  async function gatePost(body) {
+    var r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    var j = {};
+    try { j = await r.json(); } catch (e) {}
+    return { status: r.status, j: j };
+  }
+  function gateEnter(token, cohort) {
+    authSave(token, cohort);
+    state.cohortMode = true;
+    state.members = []; state.entries = []; state.recur = []; state.week = null; state.mode = null;
+    hideGate();
+    applyCohortUI();
+    if (new URLSearchParams(location.search).get('c')) history.replaceState(null, '', location.pathname);
+    loadDay();
+  }
+  function startCountdown(sec) {
+    clearInterval(gateCountdown);
+    var left = sec;
+    gateMsg('비밀번호를 여러 번 틀려 잠시 잠겼습니다 — ' + left + '초 뒤 다시 시도하세요');
+    gateCountdown = setInterval(function () {
+      left -= 1;
+      if (left <= 0) { clearInterval(gateCountdown); gateMsg(''); return; }
+      gateMsg('비밀번호를 여러 번 틀려 잠시 잠겼습니다 — ' + left + '초 뒤 다시 시도하세요');
+    }, 1000);
+  }
+  var gateBusy = false;
+  async function gateDigitsDone() {
+    if (gateBusy) return;
+    var pin = gate.buf;
+    if (gate.step === 'set1' || gate.step === 'new1') { gateGo(gate.step === 'set1' ? 'set2' : 'new2', { first: pin }); return; }
+    if ((gate.step === 'set2' || gate.step === 'new2') && pin !== gate.first) {
+      gateGo(gate.step === 'set2' ? 'set1' : 'new1', { first: null });
+      gateMsg('두 번 누른 번호가 다릅니다. 처음부터 다시 정해 주세요'); gateShake(); return;
+    }
+    gateBusy = true;
+    try {
+      var res;
+      if (gate.step === 'pin') res = await gatePost({ type: 'login', cohort: gate.cohort.id, pin: pin });
+      else if (gate.step === 'set2') res = await gatePost({ type: 'cohort-setpin', cohort: gate.cohort.id, pin: pin });
+      else res = await gatePost({ type: 'cohort-create', region: gate.region, num: gate.num, pin: pin });
+      if (res.status === 200 && res.j.token) { gateEnter(res.j.token, res.j.cohort); return; }
+      gate.buf = ''; renderGate(); gateShake();
+      var e = res.j.error;
+      if (e === 'wrong-pin') gateMsg('비밀번호가 맞지 않습니다' + (res.j.left <= 3 ? ' (' + res.j.left + '번 더 틀리면 1분간 잠깁니다)' : ''));
+      else if (e === 'locked') startCountdown(res.j.wait || 60);
+      else if (e === 'exists') { await refreshGateInfo(); gateGo('new', {}); gateMsg('이미 있는 기수입니다 — 기수 목록에서 골라 비밀번호를 눌러 들어가세요'); }
+      else if (e === 'has-pin') { await refreshGateInfo(); gateGo('pin'); gateMsg('그 사이 다른 분이 비밀번호를 정했습니다. 그 비밀번호로 들어와 주세요'); }
+      else if (e === 'no-pin') { gateGo('set1'); }
+      else gateMsg('연결이 원활하지 않습니다. 잠시 후 다시 시도해 주세요');
+    } catch (ex) {
+      gate.buf = ''; renderGate(); gateMsg('인터넷 연결을 확인해 주세요');
+    } finally { gateBusy = false; }
+  }
+  function gateKey(k) {
+    if (['pin', 'set1', 'set2', 'new1', 'new2'].indexOf(gate.step) < 0 || gateBusy) return;
+    if (k === 'del') gate.buf = gate.buf.slice(0, -1);
+    else if (gate.buf.length < 4) gate.buf += k;
+    var dots = el('gDots');
+    if (dots) Array.prototype.forEach.call(dots.children, function (d, i) { d.className = i < gate.buf.length ? 'on' : ''; });
+    if (gate.buf.length === 4) setTimeout(gateDigitsDone, 120);
+  }
+  function gateNewNext() {
+    var n = (el('gNum') ? el('gNum').value : gate.num).replace(/\D/g, '');
+    if (!gate.region) { gateMsg('지역을 골라 주세요'); return; }
+    if (!n || Number(n) < 1) { gateMsg('기수 번호를 숫자로 적어 주세요'); return; }
+    gate.num = String(Number(n));
+    var info = state.gateInfo || { cohorts: [] };
+    var dup = info.cohorts.find(function (c) { return c.region === gate.region && c.num === Number(gate.num); });
+    if (dup) { gateMsg(dup.name + '는 이미 있습니다 — 기수 목록에서 골라 들어가세요'); return; }
+    gateGo('new1', { first: null });
+  }
+  function gateBack() {
+    var s2 = gate.step;
+    if (s2 === 'list') gateGo('region', { region: null });
+    else if (s2 === 'pin' || s2 === 'set1' || s2 === 'set2' || s2 === 'new') gateGo('list');
+    else if (s2 === 'new1' || s2 === 'new2') gateGo('new');
+    else if (s2 === 'forgot') gateGo('pin');
+  }
+  el('gateCard').addEventListener('click', async function (ev) {
+    var t = ev.target.closest('button');
+    if (!t) return;
+    if (t.dataset.region) { gateGo('list', { region: t.dataset.region }); return; }
+    if (t.dataset.cohort) {
+      var c = (state.gateInfo.cohorts || []).find(function (x) { return x.id === t.dataset.cohort; });
+      if (c) gatePickCohort(c);
+      return;
+    }
+    if (t.dataset.pickregion) { gate.num = el('gNum').value; gate.region = t.dataset.pickregion; renderGate(); return; }
+    if (t.dataset.key) { gateKey(t.dataset.key); return; }
+    var act = t.dataset.act;
+    if (act === 'back') gateBack();
+    else if (act === 'new') gateGo('new', { num: '' });
+    else if (act === 'clear') { gate.buf = ''; gateKey('del'); }
+    else if (act === 'forgot') gateGo('forgot');
+    else if (t.id === 'gNext') gateNewNext();
+    else if (t.id === 'gReset') {
+      var np = el('gNewPin').value.replace(/\D/g, '');
+      if (np.length !== 4) { gateMsg('새 비밀번호는 숫자 4자리입니다'); return; }
+      var res = await gatePost({ type: 'admin-reset', cohort: gate.cohort.id, adminPin: el('gAdmin').value, newPin: np });
+      if (res.status === 200 && res.j.token) { gateEnter(res.j.token, res.j.cohort); return; }
+      gateMsg(res.j.error === 'locked' ? '여러 번 틀려 잠시 잠겼습니다. 1분 뒤 다시 시도하세요' : '관리자 비밀번호가 맞지 않습니다');
+    }
+  });
+  // PC: 숫자 키보드로도 누를 수 있게
+  document.addEventListener('keydown', function (ev) {
+    if (!gateOpen()) return;
+    if (/^[0-9]$/.test(ev.key) && ev.target.tagName !== 'INPUT') { gateKey(ev.key); ev.preventDefault(); }
+    else if (ev.key === 'Backspace' && ev.target.tagName !== 'INPUT') { gateKey('del'); ev.preventDefault(); }
+  });
+
+  // ── 기수 설정 창 ──
+  function openCohortModal() {
+    if (!state.auth) return;
+    el('cmTitle').textContent = state.auth.name + ' — 기수 설정';
+    ['cmPinNow', 'cmPinNew', 'cmPinNew2', 'cmDelPin'].forEach(function (id) { el(id).value = ''; });
+    el('cmErr').className = 'err';
+    el('cohortModalBg').classList.add('open');
+  }
+  function cmError(t) { el('cmErr').textContent = t; el('cmErr').className = 'err show'; }
+  function pinErrText(j) {
+    return j.error === 'wrong-pin' ? '지금 비밀번호가 맞지 않습니다' + (j.left <= 3 ? ' (' + j.left + '번 더 틀리면 1분간 잠깁니다)' : '')
+      : j.error === 'locked' ? '여러 번 틀려 잠시 잠겼습니다. ' + (j.wait || 60) + '초 뒤 다시 시도하세요'
+      : '처리하지 못했습니다. 잠시 후 다시 시도해 주세요';
+  }
+  async function cohortPost(body) {
+    var r = await apiFetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    var j = {};
+    try { j = await r.json(); } catch (e) {}
+    return { status: r.status, j: j };
+  }
+  el('cohortChip').addEventListener('click', openCohortModal);
+  el('cmClose').addEventListener('click', function () { el('cohortModalBg').classList.remove('open'); });
+  el('cohortModalBg').addEventListener('click', function (ev) { if (ev.target === ev.currentTarget) ev.currentTarget.classList.remove('open'); });
+  el('cmSwitch').addEventListener('click', function () { authClear(); showGate(); });
+  el('cmPinSave').addEventListener('click', async function () {
+    var now = el('cmPinNow').value, a = el('cmPinNew').value, b2 = el('cmPinNew2').value;
+    if (!/^\d{4}$/.test(now) || !/^\d{4}$/.test(a)) { cmError('비밀번호는 숫자 4자리입니다'); return; }
+    if (a !== b2) { cmError('새 비밀번호 두 칸이 서로 다릅니다'); return; }
+    var res = await cohortPost({ type: 'cohort-pin', pin: now, newPin: a });
+    if (res.status === 200 && res.j.token) {
+      authSave(res.j.token, { id: state.auth.id, name: state.auth.name });
+      el('cohortModalBg').classList.remove('open');
+      setStatus('비밀번호를 바꿨습니다');
+      setTimeout(function () { setStatus(); }, 2500);
+      return;
+    }
+    cmError(pinErrText(res.j));
+  });
+  el('cmDelete').addEventListener('click', async function () {
+    var pin = el('cmDelPin').value;
+    if (!/^\d{4}$/.test(pin)) { cmError('지금 비밀번호 4자리를 적어 주세요'); return; }
+    if (!confirm(state.auth.name + '을(를) 삭제할까요?\n팀원과 모든 일정·반복 일정이 함께 지워지며 되돌릴 수 없습니다.')) return;
+    var res = await cohortPost({ type: 'cohort-delete', pin: pin });
+    if (res.status === 200) { el('cohortModalBg').classList.remove('open'); authClear(); showGate('기수를 삭제했습니다.'); return; }
+    cmError(pinErrText(res.j));
+  });
+
   // ── 데이터 액세스 (서버 ↔ 로컬 자동 전환) ──
   async function loadDay(silent) {
+    if (gateOpen()) return;
     var date = state.date;
     if (state.mode !== 'local') {
       try {
-        var rq2 = fetch(API + '?date=' + recurDateFor(date)); // 이 요일의 반복 규칙도 함께
-        var r = await fetch(API + '?date=' + date);
+        var rq2 = apiFetch(API + '?date=' + recurDateFor(date)); // 이 요일의 반복 규칙도 함께
+        var r = await apiFetch(API + '?date=' + date);
         if (!r.ok) {
           var body = null;
           try { body = await r.json(); } catch (ignored) {}
@@ -656,6 +1065,7 @@
         maybeMigrateLocal();
         return;
       } catch (e) {
+        if (e && e.status === 401) return; // 출입증 거절 — apiFetch가 입장 화면을 띄웠다
         if (state.mode === 'server' && !(e && e.status === 503)) {
           if (!silent) setStatus('서버 응답 없음 — 잠시 후 다시 시도합니다');
           return; // 일시 오류: 기존 화면 유지
@@ -689,7 +1099,7 @@
   async function saveEntryRow(row) {
     assertWritable();
     if (state.mode === 'server') {
-      var r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      var r = await apiFetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'entry', entry: row }) });
       if (!r.ok) throw new Error('save');
     } else {
@@ -704,7 +1114,7 @@
   async function deleteEntryRow(id, date) {
     assertWritable();
     if (state.mode === 'server') {
-      var r = await fetch(API + '?id=' + encodeURIComponent(id), { method: 'DELETE' });
+      var r = await apiFetch(API + '?id=' + encodeURIComponent(id), { method: 'DELETE' });
       if (!r.ok) throw new Error('delete');
     } else {
       var db = localLoad();
@@ -717,7 +1127,7 @@
   async function saveMemberName(id, name) {
     assertWritable();
     if (state.mode === 'server') {
-      var r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      var r = await apiFetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'member', id: id, name: name }) });
       if (!r.ok) throw new Error('member');
     } else {
@@ -728,7 +1138,7 @@
   }
   var PALETTE = ['#3E6288', '#A9884F', '#5E8D66', '#B56576', '#6D597A', '#C97B4A', '#40878A', '#7D6FA0', '#8B6D5C'];
   async function postMemberRow(row) {
-    var r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    var r = await apiFetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'member-add', member: row }) });
     if (!r.ok) throw new Error('member-add');
   }
@@ -763,7 +1173,7 @@
   async function removeMemberRow(id) {
     assertWritable();
     if (state.mode === 'server') {
-      var r = await fetch(API + '?member=' + encodeURIComponent(id), { method: 'DELETE' });
+      var r = await apiFetch(API + '?member=' + encodeURIComponent(id), { method: 'DELETE' });
       if (!r.ok) throw new Error('member-del');
     } else {
       var db = localLoad();
@@ -904,7 +1314,7 @@
   }
   async function fetchDayRows(d) {
     if (state.mode === 'server') {
-      var r = await fetch(API + '?date=' + d);
+      var r = await apiFetch(API + '?date=' + d);
       if (!r.ok) throw new Error('week ' + r.status);
       return (await r.json()).entries || [];
     }
@@ -1744,7 +2154,7 @@
   async function fetchAllRecur() {
     if (state.mode === 'server') {
       var reqs = [1, 2, 3, 4, 5, 6, 7].map(function (n) {
-        return fetch(API + '?date=1900-01-0' + n)
+        return apiFetch(API + '?date=1900-01-0' + n)
           .then(function (r) { return r.ok ? r.json() : { entries: [] }; })
           .catch(function () { return { entries: [] }; });
       });
@@ -2128,6 +2538,7 @@
       el('xlModalBg').classList.remove('open');
       closeCal();
       closeTeamModal();
+      el('cohortModalBg').classList.remove('open');
     }
   });
 
@@ -2176,7 +2587,7 @@
 
   async function fetchDayData(date) {
     if (state.mode === 'server') {
-      var r = await fetch(API + '?date=' + date);
+      var r = await apiFetch(API + '?date=' + date);
       if (!r.ok) throw new Error('load');
       return await r.json();
     }
@@ -2187,7 +2598,7 @@
     assertWritable();
     if (state.mode === 'server') {
       for (var i = 0; i < rows.length; i += 200) {
-        var r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        var r = await apiFetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ type: 'entries', entries: rows.slice(i, i + 200) }) });
         if (!r.ok) throw new Error('bulk');
       }
@@ -2198,7 +2609,7 @@
   async function deleteDayEntries(date) {
     assertWritable();
     if (state.mode === 'server') {
-      var r = await fetch(API + '?date=' + encodeURIComponent(date), { method: 'DELETE' });
+      var r = await apiFetch(API + '?date=' + encodeURIComponent(date), { method: 'DELETE' });
       if (!r.ok) throw new Error('day-del');
     } else {
       var db = localLoad();
@@ -2488,7 +2899,8 @@
     ctx.fillStyle = '#1E3A50';
     ctx.font = '900 21px ' + FONT;
     ctx.textBaseline = 'middle';
-    ctx.fillText(p[0] + '년 ' + Number(p[1]) + '월 ' + Number(p[2]) + '일 (' + dowKo(state.date) + ') 팀 일정',
+    ctx.fillText((state.auth ? state.auth.name + ' · ' : '') +
+      p[0] + '년 ' + Number(p[1]) + '월 ' + Number(p[2]) + '일 (' + dowKo(state.date) + ') 팀 일정',
       pad, pad + 24);
     ctx.font = '500 12px ' + FONT;
     ctx.fillStyle = '#A9884F';
@@ -2787,7 +3199,7 @@
     }
   });
 
-  loadDay();
+  boot();
 })();
 </script>
 </body>
