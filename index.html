@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex" />
 <!-- 홈 화면에 설치해 앱처럼 쓰기 위한 설정 -->
 <link rel="manifest" href="/manifest.json" />
-<meta name="theme-color" content="#2A4A6B" />
+<meta name="theme-color" content="#1C3347" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 <link rel="icon" href="/icons/icon-192.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -17,19 +17,21 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Noto+Serif+KR:wght@600;700&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --navy-1: #3E6288; --navy-2: #2A4A6B; --navy-3: #1F3A55;
-    --deep: #1E3A50; --paper: #FFFFFF;
-    --soft: #EEF3F7; --line: #DCE4EC; --muted: #4E6076; --faint: #8CA0B3;
-    --gold: #C7B48E; --brass: #A9884F;
+    --navy-1: #3A5A7A; --navy-2: #1C3347; --navy-3: #142636;
+    --deep: #1C3347; --paper: #FFFFFF;
+    --soft: #EEF1F3; --line: #E0E4E8; --muted: #56657A; --faint: #8F9BA8;
+    --gold: #C9AE78; --brass: #9C7A3C;
+    --page: #F3F5F6; --rule-soft: #EEF0F2; --now: #C8553D;
+    --serif: 'Noto Serif KR', 'Noto Sans KR', serif;
     --free: #3E7A55;
     --sans: 'Noto Sans KR', sans-serif;
     --slot-h: 36px;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: var(--sans); color: var(--deep); background: #F6F8FA; line-height: 1.6; word-break: keep-all; }
+  body { font-family: var(--sans); color: var(--deep); background: var(--page); line-height: 1.6; word-break: keep-all; }
   button { font-family: inherit; cursor: pointer; }
   input, select, textarea { font-family: inherit; font-size: 14px; color: var(--deep); }
 
@@ -298,6 +300,107 @@
   @media (max-width: 640px) {
     .brand .name { display: none; }
   }
+  /* ════ 디자인 개편 (2026-11-24): 종이 플래너 — 잉크 남색 · 황동 포인트 · 명조 날짜 ════ */
+  .top-accent { display: none; }
+  svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8;
+    stroke-linecap: round; stroke-linejoin: round; }
+  :focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  .bar { background: rgba(255,255,255,.97); padding-top: 0; border-bottom: 1px solid var(--line); }
+  .bar-in { display: grid; grid-template-columns: 1fr auto 1fr; grid-template-areas: "brand date status" "tools tools tools";
+    align-items: center; gap: 10px 16px; padding: 12px 20px 10px; }
+  .brand { grid-area: brand; gap: 10px; font-size: 15px; letter-spacing: -.01em; min-width: 0; }
+  .brand .mark { width: 28px; height: 28px; border-radius: 8px; background: var(--navy-2); flex: none;
+    display: flex; align-items: center; justify-content: center; }
+  .brand .mark svg { width: 18px; height: 18px; stroke: var(--gold); stroke-width: 3; fill: none; stroke-linecap: round; }
+  .brand .name { font-weight: 800; color: var(--deep); white-space: nowrap; }
+  .brand .sub { display: none; }
+  .cohort-chip { margin-left: 2px; font-family: var(--serif); font-weight: 700; font-size: 13.5px; padding: 3px 12px 4px;
+    border: 1px solid rgba(156,122,60,.35); background: #FBF8F1; color: #7A5B22; }
+  .cohort-chip:hover { background: #F5EEDD; }
+  .status { grid-area: status; justify-self: end; width: auto; margin: 0; font-size: 12px; white-space: nowrap; }
+
+  .date-nav { grid-area: date; margin-left: 0; gap: 4px; }
+  .date-nav .nav-btn { width: 36px; height: 36px; border-radius: 99px; display: flex; align-items: center;
+    justify-content: center; color: var(--deep); border-color: var(--line); }
+  .date-label { border: 0; background: transparent; padding: 4px 10px; border-radius: 10px; gap: 8px;
+    font-family: var(--serif); font-size: 22px; font-weight: 700; letter-spacing: -.01em; line-height: 1.25; }
+  .date-label .y { font-size: 14px; font-weight: 600; color: var(--faint); margin-right: 2px; }
+  .date-label .dow { color: var(--brass); }
+  .date-label .caret { display: flex; color: var(--faint); }
+  .date-label .caret svg { width: 14px; height: 14px; }
+  .date-label:hover { background: var(--soft); }
+  #todayBtn { margin-left: 6px; border-radius: 99px; padding: 6px 14px; font-size: 13px; color: var(--deep); }
+
+  .tools { grid-area: tools; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+    border-top: 1px solid var(--rule-soft); padding-top: 10px; }
+  .tool { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px; border: 0; border-radius: 9px;
+    background: transparent; color: var(--deep); font-size: 13.5px; font-weight: 600; white-space: nowrap; }
+  .tool:hover { background: var(--soft); }
+  .tool svg.i { color: var(--muted); }
+  .tool.on { background: var(--navy-2); color: #fff; }
+  .tool.on svg.i { color: var(--gold); }
+  .tool:disabled { opacity: .38; cursor: default; background: transparent; }
+  .tools .sep { width: 1px; height: 20px; background: var(--line); margin: 0 6px; }
+  .tool.primary { margin-left: auto; background: var(--navy-2); color: #fff; padding: 0 16px; }
+  .tool.primary svg.i { color: var(--gold); }
+  .tool.primary:hover { background: var(--navy-3); }
+  #wideBtn { display: none; }
+
+  /* 표: 머리줄은 흰 바탕 + 팀원 색 밑줄, 칸 선은 옅게 */
+  .board { border-color: var(--line); border-radius: 16px; box-shadow: 0 1px 2px rgba(28,51,71,.04); }
+  .hcell { background: #fff; color: var(--deep); font-size: 14px; font-weight: 700; padding: 12px 6px 10px;
+    border-left: 1px solid var(--rule-soft); }
+  .hcell:hover { background: #FAFBFB; }
+  .hcell .pen { color: var(--faint); }
+  .hcell.corner { background: #FAFBFB; color: var(--faint); font-size: 12px; font-weight: 600;
+    border-bottom: 3px solid var(--line); }
+  .hcell.addcol { background: #FAFBFB; color: var(--faint); border-bottom: 3px solid var(--line); }
+  .hcell.addcol:hover { color: var(--brass); }
+  .grid.week .hcell { border-bottom: 3px solid var(--line); }
+  .grid.week .hcell.today { background: #FBF8F1; color: #7A5B22; border-bottom-color: var(--brass); }
+  .grid.week .hcell.sun { color: #B4443A; } .grid.week .hcell.sat { color: #2F5F8F; }
+  .grid.week .mcol.today { background: #FDFBF6; }
+  .timecol { background: #FAFBFB; border-right-color: var(--line); }
+  .timecol .t { color: var(--muted); font-weight: 600; border-top-color: var(--line); }
+  .timecol .t.half { color: #B9C2CB; font-weight: 400; border-top-color: var(--rule-soft); }
+  .mcol { border-left-color: var(--rule-soft); }
+  .mcol .slot { border-top-color: #F3F4F6; }
+  .mcol .slot.hour { border-top-color: var(--line); }
+  .mcol .slot:hover { background: #F5F7F9; }
+  .entry { border-radius: 7px; padding: 5px 8px; }
+  .entry b { font-weight: 700; letter-spacing: -.01em; }
+  .now-line { border-top-color: var(--now); }
+  .now-line::before { background: var(--now); }
+
+  /* 창 */
+  .modal-bg { background: rgba(20,38,54,.42); }
+  .modal { border-radius: 18px; padding: 24px; box-shadow: 0 24px 60px rgba(20,38,54,.28); }
+  .modal h3 { font-family: var(--serif); font-size: 18px; font-weight: 700; color: var(--deep); }
+  .btn { border-radius: 10px; color: var(--deep); font-weight: 600; }
+  .btn.primary { font-weight: 700; }
+  .hint-toast { background: rgba(28,51,71,.95); border-radius: 14px; }
+
+  @media (max-width: 760px) {
+    .bar-in { grid-template-columns: 1fr auto; grid-template-areas: "brand status" "date date" "tools tools";
+      padding: 8px 10px 10px; gap: 6px 8px; }
+    .brand .name { font-size: 14px; }
+    .status { font-size: 11px; }
+    .date-nav { justify-self: center; }
+    .date-nav .nav-btn { width: 34px; height: 34px; }
+    .date-label { font-size: 19px; padding: 3px 6px; }
+    .date-label .y { display: none; }
+    #todayBtn { padding: 5px 11px; font-size: 12.5px; margin-left: 4px; }
+    .tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; border-top: 0; padding-top: 2px; }
+    .tools .sep { display: none; }
+    .tool { flex-direction: column; justify-content: center; height: 56px; padding: 4px 2px; gap: 4px; font-size: 11.5px;
+      letter-spacing: -.03em; background: #F3F5F6; border-radius: 11px; }
+    .tool.primary { margin-left: 0; padding: 4px 2px; }
+    .tool.on { background: var(--navy-2); }
+    #wideBtn { display: inline-flex; }
+    .hcell { font-size: 12.5px; }
+  }
+  @media (max-width: 640px) { .brand .name { display: inline; } .brand.has-cohort .name { display: none; } }
+
   /* ── 기수 입장 화면 (2026-11-24) ── */
   .gate { position: fixed; inset: 0; z-index: 100; overflow-y: auto; display: none;
     background: linear-gradient(180deg, var(--navy-3) 0, var(--navy-3) 210px, #F3F5F8 210px); }
@@ -344,11 +447,38 @@
   .cohort-chip { border: 1px solid rgba(169,136,79,.5); background: #FBF6EA; color: #8A6A17; border-radius: 99px; padding: 4px 11px;
     font-size: 12.5px; font-weight: 800; margin-left: 8px; display: none; }
   .cohort-chip.show { display: inline-block; }
+  /* 입장 화면 — 개편 */
+  .gate { background: linear-gradient(180deg, var(--navy-2) 0, var(--navy-2) 230px, var(--page) 230px); }
+  .gate-top { padding: 40px 16px 0; }
+  .gate-top .mark { width: 44px; height: 44px; border-radius: 12px; margin: 0 auto 14px; background: rgba(255,255,255,.08);
+    border: 1px solid rgba(201,174,120,.35); display: flex; align-items: center; justify-content: center; }
+  .gate-top .mark svg { width: 24px; height: 24px; stroke: var(--gold); stroke-width: 2.8; fill: none; stroke-linecap: round; }
+  .gate-top .t1 { font-family: var(--serif); font-size: 25px; font-weight: 700; letter-spacing: -.01em; }
+  .gate-top .t2 { font-size: 13px; color: rgba(255,255,255,.62); letter-spacing: 0; margin-top: 6px; }
+  .gate-card { border-radius: 22px; padding: 26px 22px 24px; box-shadow: 0 20px 50px rgba(20,38,54,.16); }
+  .gate-card h2 { font-family: var(--serif); font-size: 23px; font-weight: 700; letter-spacing: -.01em; }
+  .gate-back { display: inline-flex; align-items: center; gap: 2px; color: var(--muted); font-weight: 600; }
+  .g-big { border-color: var(--line); border-radius: 14px; font-family: var(--serif); font-size: 19px; font-weight: 700; padding: 17px 10px; }
+  .g-big small { font-family: var(--sans); font-weight: 500; }
+  .g-big:hover { background: #FAFBFB; border-color: var(--navy-1); }
+  .g-big.new { font-family: var(--sans); font-size: 16px; color: var(--brass); border-color: rgba(156,122,60,.45); }
+  .pin-dots { gap: 18px; margin: 10px 0 12px; }
+  .pin-dots i { width: 14px; height: 14px; border: 0; background: var(--line); transition: background .12s, transform .12s; }
+  .pin-dots i.on { background: var(--navy-2); transform: scale(1.12); }
+  .keypad { gap: 10px 14px; max-width: 288px; }
+  .keypad button { height: 62px; border: 0; background: #F2F4F5; border-radius: 18px; font-size: 25px; font-weight: 600; }
+  .keypad button:active { background: #E4E8EB; }
+  .keypad button.fn { font-size: 14px; color: var(--muted); display: flex; align-items: center; justify-content: center; }
+  .keypad button.fn svg { width: 24px; height: 24px; }
+  .g-link { color: var(--muted); }
+  .g-primary { background: var(--navy-2); border-radius: 14px; }
+  .g-chips button.on { background: var(--navy-2); border-color: var(--navy-2); }
+  @media (prefers-reduced-motion: reduce) { .pin-dots.shake { animation: none; } .pin-dots i { transition: none; } }
 </style>
 </head>
 <body>
 <div class="gate" id="gate" aria-modal="true" role="dialog">
-  <div class="gate-top"><div class="t1">팀 일정 공유</div><div class="t2">DAILY TIMETABLE</div></div>
+  <div class="gate-top"><div class="mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 5v8M12 9v10M17.5 5v5"/></svg></div><div class="t1">팀 일정 공유</div><div class="t2">우리 기수의 하루 일정을 함께 봅니다</div></div>
   <div class="gate-card" id="gateCard"></div>
 </div>
 
@@ -383,27 +513,32 @@
 <header class="bar">
   <div class="bar-in">
     <div class="brand">
+      <span class="mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 5v8M12 9v10M17.5 5v5"/></svg></span>
       <span class="name">팀 일정 공유</span><span class="sub">Daily Timetable</span>
       <button class="cohort-chip" id="cohortChip" title="기수 설정 · 기수 바꾸기"></button>
     </div>
     <div class="date-nav">
-      <button class="nav-btn" id="prevDay" title="이전 날">◀</button>
-      <div class="date-label" id="dateLabel">
-        <span id="dateText">…</span><span class="caret">▼</span>
+      <button class="nav-btn" id="prevDay" title="이전 날" aria-label="이전 날" data-ico="left"></button>
+      <div class="date-label" id="dateLabel" role="button" tabindex="0" title="달력에서 날짜 고르기">
+        <span id="dateText">…</span><span class="caret" data-ico="down"></span>
       </div>
-      <button class="nav-btn" id="nextDay" title="다음 날">▶</button>
+      <button class="nav-btn" id="nextDay" title="다음 날" aria-label="다음 날" data-ico="right"></button>
       <button class="today-btn" id="todayBtn">오늘</button>
     </div>
-    <button class="today-btn" id="copyBtn" title="오늘 일정표를 이미지로 복사해 카톡·텔레그램에 붙여넣기">📷 복사</button>
-    <button class="today-btn" id="xlBtn" title="엑셀로 내려받기 / 엑셀로 일정 올리기">📊 엑셀</button>
-    <button class="today-btn" id="weekBtn" title="팀원 한 명의 일주일 일정 보기">📅 주간 보기</button>
-    <button class="today-btn" id="wideBtn" title="넓게 보기 / 한 화면에 보기">↔ 넓게</button>
-    <button class="today-btn" id="installBtn" style="display:none" title="홈 화면에 앱으로 추가">📲 앱 설치</button>
-    <button class="meet-btn" id="allAddBtn" style="background:var(--brass)" title="모든 팀원에게 같은 일정을 한 번에 등록">📌 전체 일정 추가</button>
-    <button class="meet-btn" id="recurBtn" title="매주 같은 요일에 자동으로 들어가는 일정을 관리">🔁 반복 일정</button>
-    <button class="today-btn" id="teamBtn" title="팀원 이름·색·순서를 고치고, 추가·삭제">👥 팀원 설정</button>
-    <button class="meet-btn" id="meetToggle">🕐 회의 시간 찾기</button>
     <div class="status" id="status"><span class="dot"></span>연결 확인 중…</div>
+    <nav class="tools" aria-label="도구">
+      <button class="tool" id="weekBtn" data-ico="calendar" title="팀원 한 명의 일주일 일정 보기"><span class="lb">주간 보기</span></button>
+      <button class="tool" id="meetToggle" data-ico="clock" title="모두가 비는 시간 찾기"><span class="lb">회의 시간 찾기</span></button>
+      <button class="tool" id="wideBtn" data-ico="expand" title="넓게 보기 / 한 화면에 보기"><span class="lb">넓게</span></button>
+      <span class="sep"></span>
+      <button class="tool" id="copyBtn" data-ico="image" title="오늘 일정표를 이미지로 복사해 카톡·텔레그램에 붙여넣기"><span class="lb">이미지 복사</span></button>
+      <button class="tool" id="xlBtn" data-ico="sheet" title="엑셀로 내려받기 / 엑셀로 일정 올리기"><span class="lb">엑셀</span></button>
+      <span class="sep"></span>
+      <button class="tool" id="teamBtn" data-ico="users" title="팀원 이름·색·순서를 고치고, 추가·삭제"><span class="lb">팀원 설정</span></button>
+      <button class="tool" id="recurBtn" data-ico="repeat" title="매주 같은 요일에 자동으로 들어가는 일정을 관리"><span class="lb">반복 일정</span></button>
+      <button class="tool" id="installBtn" data-ico="download" style="display:none" title="홈 화면에 앱으로 추가"><span class="lb">앱 설치</span></button>
+      <button class="tool primary" id="allAddBtn" data-ico="plus" title="모든 팀원에게 같은 일정을 한 번에 등록"><span class="lb">전체 일정 추가</span></button>
+    </nav>
   </div>
 </header>
 
@@ -478,7 +613,7 @@
 <!-- 반복 일정 모달 -->
 <div class="modal-bg" id="recurModalBg">
   <div class="modal" style="max-width: 560px">
-    <h3>🔁 매주 반복 일정</h3>
+    <h3>매주 반복 일정</h3>
     <div class="xl-help">고른 요일마다 표에 자동으로 나타납니다. 드래그로 옮길 수 없고, 여기서 추가·수정·삭제합니다.</div>
     <div id="rEditBar" style="display:none;margin:10px 0 2px;padding:8px 12px;border-radius:10px;background:rgba(233,196,106,.18);color:#8A6A17;font-size:13px;font-weight:700"></div>
     <div class="f-row">
@@ -518,7 +653,7 @@
     <h3>엑셀로 일정 주고받기</h3>
 
     <div class="xl-sec">
-      <div class="xl-t">📥 일정표 내려받기</div>
+      <div class="xl-t">일정표 내려받기</div>
       <div class="f-row">
         <label class="t">기간</label>
         <div class="time-pair">
@@ -530,7 +665,7 @@
     </div>
 
     <div class="xl-sec">
-      <div class="xl-t">📤 엑셀로 일정 올리기</div>
+      <div class="xl-t">엑셀로 일정 올리기</div>
       <div class="xl-help">
         <b>날짜 · 이름 · 시작 · 종료 · 일정 · 메모</b> 순서로 채운 파일을 올리면 자동으로 등록됩니다.
         (예: <code>2026-08-17</code> · <code>홍길동</code> · <code>09:00</code> · <code>10:00</code> · <code>거래처 미팅</code>)
@@ -562,7 +697,7 @@
 <!-- 팀원 설정 모달 -->
 <div class="modal-bg" id="teamModalBg">
   <div class="modal" style="max-width: 520px">
-    <h3>👥 팀원 설정</h3>
+    <h3>팀원 설정</h3>
     <div class="xl-help">이름·색을 고치고, 왼쪽 ⠿ 손잡이를 잡고 끌어 순서를 바꾼 뒤 「저장」을 누르면 팀 전체 화면에 반영됩니다. 삭제한 팀원의 일정은 함께 지워집니다.</div>
     <div id="tmList" style="margin-top:8px"></div>
     <div class="tm-row" style="border-bottom:0;margin-top:6px">
@@ -711,6 +846,26 @@
     return colors.map(function (c, i) { return { id: 'm' + (i + 1), name: '팀원 ' + (i + 1), color: c, sort: i + 1 }; });
   }
 
+  // ── 선 아이콘 (이모지 대신 — 기기마다 모양이 달라지지 않게) ──
+  var ICONS = {
+    left: '<path d="M15 18l-6-6 6-6"/>', right: '<path d="M9 18l6-6-6-6"/>', down: '<path d="M6 9l6 6 6-6"/>',
+    calendar: '<rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M16 2.5v4M8 2.5v4M3 10h18"/>',
+    day: '<rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M16 2.5v4M8 2.5v4M3 10h18"/><rect x="10" y="13.5" width="4" height="4" rx="1"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/>',
+    expand: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
+    shrink: '<path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/>',
+    image: '<rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="9" cy="9" r="1.8"/><path d="M21 15l-4.5-4.5L6 21"/>',
+    sheet: '<rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M3 9h18M3 15h18M10 3v18"/>',
+    users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20v-1a5 5 0 0 1 5-5h3a5 5 0 0 1 5 5v1M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20v-1a5 5 0 0 0-3.5-4.8"/>',
+    repeat: '<path d="M17 2l4 4-4 4"/><path d="M3 11V10a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+    download: '<path d="M12 3v12M7 10l5 5 5-5M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    back: '<path d="M21 5H9l-6 7 6 7h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z"/><path d="M17 9.5l-5 5M12 9.5l5 5"/>'
+  };
+  function ico(n) { return '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[n] || '') + '</svg>'; }
+  function setTool(id, icon, label) { el(id).innerHTML = ico(icon) + '<span class="lb">' + label + '</span>'; }
+  document.querySelectorAll('[data-ico]').forEach(function (b) { b.insertAdjacentHTML('afterbegin', ico(b.dataset.ico)); });
+
   // ── 기수 로그인 (2026-11-24) ──
   // 서버에 기수 표가 있으면 「기수 모드」: 지역 → 기수 → 비밀번호 4자리로 들어가고,
   // 받은 출입증을 이 기기에 30일 기억한다. 표가 없으면 종전처럼 로그인 없이 동작한다.
@@ -750,9 +905,11 @@
     if (state.cohortMode && state.auth) {
       chip.textContent = state.auth.name + ' ▾';
       chip.classList.add('show');
+      chip.parentNode.classList.add('has-cohort');
       document.title = state.auth.name + ' · 팀 일정 공유';
     } else {
       chip.classList.remove('show');
+      chip.parentNode.classList.remove('has-cohort');
       document.title = '팀 일정 공유';
     }
   }
@@ -818,7 +975,7 @@
 
   function renderGate() {
     var c = el('gateCard'), info = state.gateInfo || { cohorts: [], regions: [] }, h = '';
-    var back = function (label) { return '<button class="gate-back" data-act="back">‹ ' + label + '</button>'; };
+    var back = function (label) { return '<button class="gate-back" data-act="back">' + ico('left') + label + '</button>'; };
     if (gate.step === 'region') {
       h += '<h2>어느 지역인가요?</h2><div class="gsub">지역을 고르면 그 지역의 기수가 나옵니다</div><div class="g-grid">';
       (info.regions || []).forEach(function (r) {
@@ -848,7 +1005,7 @@
         '<div class="pin-dots" id="gDots">' + [0, 1, 2, 3].map(function (i) { return '<i' + (i < gate.buf.length ? ' class="on"' : '') + '></i>'; }).join('') + '</div>' +
         '<div class="g-msg' + (gate.msgOk ? ' ok' : '') + '" id="gMsg">' + esc(gate.msg) + '</div><div class="keypad">';
       ['1', '2', '3', '4', '5', '6', '7', '8', '9'].forEach(function (k) { h += '<button data-key="' + k + '">' + k + '</button>'; });
-      h += '<button class="fn" data-act="clear">지우기</button><button data-key="0">0</button><button class="fn" data-key="del">⌫</button></div>';
+      h += '<button class="fn" data-act="clear">지우기</button><button data-key="0">0</button><button class="fn" data-key="del" aria-label="한 자리 지우기">' + ico('back') + '</button></div>';
       if (gate.step === 'pin') h += '<button class="g-link" data-act="forgot">비밀번호를 잊었어요</button>';
     } else if (gate.step === 'new') {
       h += back('기수 목록') + '<h2>새 기수 만들기</h2><div class="gsub">지역을 고르고 기수 번호(숫자)를 적으세요</div><div class="g-chips">';
@@ -1215,7 +1372,7 @@
     var err = state.serverErr || {};
     var msg;
     if (state.mode === 'offline') {
-      msg = '📴 인터넷에 연결되어 있지 않아 <b>마지막으로 받은 일정</b>을 보여주고 있습니다. ' +
+      msg = '인터넷에 연결되어 있지 않아 <b>마지막으로 받은 일정</b>을 보여주고 있습니다. ' +
         '연결되면 자동으로 최신 상태가 됩니다. (이 상태에서는 일정을 바꿀 수 없습니다)';
     } else if (err.status === 503) {
       var b = err.body || {};
@@ -1241,7 +1398,7 @@
       } else if (/fetch failed|enotfound|getaddrinfo|econn|abort/.test(dl)) {
         hint = ' → Vercel의 <code>SUPABASE_URL</code> 값이 올바른지 확인해 주세요.';
       }
-      msg = '⚠️ 서버 연결에 실패해 <b>이 브라우저에만</b> 저장 중입니다. ' +
+      msg = '서버 연결에 실패해 <b>이 브라우저에만</b> 저장 중입니다. ' +
         '<b>오류:</b> ' + esc(d || ('HTTP ' + err.status)) + hint;
     }
     el('localNoticeText').innerHTML = msg + ' <button id="retryConn">다시 연결 시도</button>';
@@ -1300,11 +1457,11 @@
     if (state.weekMode) {
       var a = weekStart(state.date), b = shiftDate(a, 6);
       var pa = a.split('-'), pb = b.split('-');
-      el('dateText').innerHTML = pa[0] + '년 ' + Number(pa[1]) + '월 ' + Number(pa[2]) + '일 ~ ' +
-        (pa[1] === pb[1] ? '' : Number(pb[1]) + '월 ') + Number(pb[2]) + '일 <span class="dow">(주간)</span>';
+      el('dateText').innerHTML = '<span class="y">' + pa[0] + '년</span>' + Number(pa[1]) + '월 ' + Number(pa[2]) + '일 – ' +
+        (pa[1] === pb[1] ? '' : Number(pb[1]) + '월 ') + Number(pb[2]) + '일 <span class="dow">주간</span>';
       return;
     }
-    el('dateText').innerHTML = p[0] + '년 ' + Number(p[1]) + '월 ' + Number(p[2]) + '일 <span class="dow">(' + dowKo(state.date) + ')</span>';
+    el('dateText').innerHTML = '<span class="y">' + p[0] + '년</span>' + Number(p[1]) + '월 ' + Number(p[2]) + '일 <span class="dow">' + dowKo(state.date) + '요일</span>';
   }
 
   // ── 주간 보기 (2026-11-19 요청) — 팀원 한 명의 월~일을 한 표에 ──
@@ -1343,11 +1500,12 @@
   function setWeekMode(on) {
     state.weekMode = on;
     if (on) { state.meetOpen = false; state.week = null; }
-    el('weekBtn').textContent = on ? '🗓 하루 보기' : '📅 주간 보기';
+    setTool('weekBtn', on ? 'day' : 'calendar', on ? '하루 보기' : '주간 보기');
+    el('weekBtn').classList.toggle('on', on);
     el('weekBtn').title = on ? '팀 전체의 하루 보기로 돌아가기' : '팀원 한 명의 일주일 일정 보기';
     el('weekBar').style.display = on ? '' : 'none';
     el('copyBtn').disabled = on; el('meetToggle').disabled = on;
-    el('copyBtn').style.opacity = el('meetToggle').style.opacity = on ? '.45' : '';
+
     render();
   }
   function weekMember() {
@@ -1425,7 +1583,7 @@
           b.className = 'wk-band';
           b.style.top = top + 'px'; b.style.height = (bottom - top) + 'px';
           b.title = '매주 반복 — ' + r.title + ' ' + fmtMin(r.start_min) + '~' + fmtMin(r.end_min) + ' (누르면 수정)';
-          b.innerHTML = '<span>🔁 ' + esc(r.title) + '</span>';
+          b.innerHTML = '<span>↻ ' + esc(r.title) + '</span>';
           b.addEventListener('click', function () { openRecurModal(r); });
           col.appendChild(b);
         });
@@ -1453,7 +1611,7 @@
             div.style.right = 'calc(' + ((pl.of - 1 - pl.lane) * 100 / pl.of) + '% + 3px)';
           }
           var tag = n > 1 ? (n === state.members.length ? '전원' : n + '명') : '';
-          div.innerHTML = '<b>' + (e.recur ? '🔁 ' : '') + esc(e.title) + '</b><span class="tm">' +
+          div.innerHTML = '<b>' + (e.recur ? '↻ ' : '') + esc(e.title) + '</b><span class="tm">' +
             fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + (tag ? ' · ' + tag : '') + '</span>';
           div.title = e.title + ' ' + fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + (tag ? ' (' + tag + ')' : '') +
             (e.memo ? '\n' + e.memo : '') + '\n(누르면 수정)';
@@ -1757,13 +1915,13 @@
     div.style.borderColor = hexToRgba(color, .35);
     div.style.borderLeft = '4px solid ' + color;
     div.style.color = '#243B50';
-    div.innerHTML = '<div class="rz rz-top"></div><b>' + (e.recur ? '🔁 ' : '') + esc(e.title) + '</b><span class="tm">' +
+    div.innerHTML = '<div class="rz rz-top"></div><b>' + (e.recur ? '↻ ' : '') + esc(e.title) + '</b><span class="tm">' +
       fmtMin(e.start_min) + '~' + fmtMin(e.end_min) + '</span>' +
       (whoLabel ? '<span class="who">' + esc(whoLabel) + '</span>' : '') +
       '<div class="rz rz-bot"></div>';
     div.title = e.title + (e.memo ? '\n' + e.memo : '') +
       (whoLabel ? '\n함께: ' + group.map(function (x) { return memberName(x.member_id); }).join(', ') : '') +
-      (e.recur ? '\n매주 반복 일정 — 🔁 반복 일정에서 수정/삭제합니다'
+      (e.recur ? '\n매주 반복 일정 — 「반복 일정」에서 수정/삭제합니다'
                : '\n(드래그: 이동 · 가장자리: 시간 조절)');
     div.addEventListener('pointerdown', function (ev) { startEntryDrag(ev, group, div); });
     return div;
@@ -1897,7 +2055,7 @@
   function renderMeetPanel() {
     if (state.weekMode) { el('meetPanel').className = 'meet-panel'; return; }
     el('meetPanel').className = 'meet-panel' + (state.meetOpen ? ' open' : '');
-    el('meetToggle').className = 'meet-btn' + (state.meetOpen ? ' on' : '');
+    el('meetToggle').classList.toggle('on', !!state.meetOpen);
     if (!state.meetOpen) return;
 
     var wrap = el('meetMembers');
@@ -2135,7 +2293,7 @@
       who.add(new Option(memberName(e.member_id), e.member_id)); // 명단에서 빠진 사람이어도 값은 지킨다
     }
     who.value = e.member_id;
-    el('rEditBar').textContent = '✏️ 「' + e.title + '」 수정 중 — 고친 뒤 「수정 저장」을 누르세요';
+    el('rEditBar').textContent = '「' + e.title + '」 수정 중 — 고친 뒤 「수정 저장」을 누르세요';
     el('rEditBar').style.display = '';
     el('rCancelEdit').style.display = '';
     el('rSave').textContent = '수정 저장';
@@ -3046,8 +3204,8 @@
   async function copyDayImage() {
     var btn = el('copyBtn');
     btn.disabled = true;
-    var oldText = btn.textContent;
-    btn.textContent = '만드는 중…';
+    var oldText = btn.innerHTML;
+    btn.querySelector('.lb').textContent = '만드는 중…';
     try {
       var cv = makeDayImage();
       var blobPromise = new Promise(function (res, rej) {
@@ -3062,11 +3220,11 @@
         if (navigator.canShare({ files: [file] })) {
           try {
             await navigator.share({ files: [file], title: '팀 일정 ' + state.date });
-            btn.disabled = false; btn.textContent = oldText;
+            btn.disabled = false; btn.innerHTML = oldText;
             return;
           } catch (shareErr) {
             if (shareErr && shareErr.name === 'AbortError') { // 사용자가 닫음
-              btn.disabled = false; btn.textContent = oldText;
+              btn.disabled = false; btn.innerHTML = oldText;
               return;
             } // 그 외 실패 → 아래 클립보드로
           }
@@ -3076,7 +3234,7 @@
       // PC(또는 공유 불가): 클립보드에 이미지 복사
       if (navigator.clipboard && window.ClipboardItem) {
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
-        showToast('📋 일정표 이미지가 복사되었습니다.<br>카톡·텔레그램 채팅창에 <b>붙여넣기(Ctrl+V)</b> 하세요.');
+        showToast('일정표 이미지가 복사되었습니다.<br>카톡·텔레그램 채팅창에 <b>붙여넣기(Ctrl+V)</b> 하세요.');
       } else {
         saveFile(await blobPromise, fname, 'image/png'); // 마지막 수단: 파일로 저장
         showToast('이미지 파일로 저장했습니다.<br>저장된 사진을 공유해 주세요.');
@@ -3091,7 +3249,7 @@
       }
     }
     btn.disabled = false;
-    btn.textContent = oldText;
+    btn.innerHTML = oldText;
   }
   el('copyBtn').addEventListener('click', copyDayImage);
 
@@ -3124,7 +3282,7 @@
 
   // 좁은 화면에서 '한 화면에 보기' ↔ '넓게 보기' 전환
   function syncWideBtn() {
-    el('wideBtn').textContent = state.wide ? '⤢ 한 화면' : '↔ 넓게';
+    setTool('wideBtn', state.wide ? 'shrink' : 'expand', state.wide ? '한 화면' : '넓게');
     el('wideBtn').title = state.wide
       ? '팀원 전체가 한 화면에 들어오도록 줄이기'
       : '글씨를 키워 넓게 보기 (가로로 넘겨서 확인)';

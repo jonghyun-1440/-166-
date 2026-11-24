@@ -72,6 +72,26 @@ alter table schedule_entries enable row level security;
   - 아이폰: **Safari**로 접속 → 공유 버튼 → "홈 화면에 추가"
   - 안드로이드: Chrome → ⋮ → "앱 설치"
 
+### (선택) 기수 로그인 켜기
+
+여러 기수(또는 여러 팀)가 사이트 하나를 나눠 쓰려면, Supabase SQL Editor에서 아래를 한 번 더 실행하세요.
+입장 화면에서 **지역 → 기수 → 비밀번호 4자리**로 들어가고, 기수마다 일정표가 따로 관리됩니다.
+지역 목록은 Vercel 환경변수 `COHORT_REGIONS`(쉼표 구분, 예: `본부,1팀,2팀`)로 바꿀 수 있습니다.
+
+```sql
+create table if not exists schedule_cohorts (
+  id text primary key, region text not null, num int not null,
+  pin_hash text, fail_count int not null default 0, locked_until timestamptz,
+  created_at timestamptz default now(), unique (region, num)
+);
+alter table schedule_cohorts enable row level security;
+alter table schedule_members add column if not exists cohort_id text not null default '';
+alter table schedule_entries add column if not exists cohort_id text not null default '';
+create index if not exists schedule_entries_cohort_date_idx on schedule_entries (cohort_id, date);
+```
+
+비밀번호를 잊었을 때를 대비하려면 Vercel 환경변수에 `ADMIN_PIN`(관리자 비밀번호)을 추가하고 Redeploy 하세요.
+
 ---
 
 ## 주소(도메인) 설정
@@ -87,10 +107,10 @@ alter table schedule_entries enable row level security;
 | 일정 등록 | 본인 열의 빈 칸 클릭 |
 | 일정 수정/삭제 | 일정 블록 클릭 |
 | 시간 옮기기 | 블록 드래그 (폰은 **길게 누른 뒤** 드래그) / 위·아래 가장자리 끌면 시간 조절 |
-| 전체 공통 일정 | 상단 "📌 전체 일정 추가" — 전원 칸에 하나의 막대로 표시 |
+| 전체 공통 일정 | 상단 「전체 일정 추가」 — 전원 칸에 하나의 막대로 표시 |
 | 회의 시간 찾기 | 상단 버튼 → 모두 비는 시간이 초록색으로 → 클릭하면 전원 회의 등록 |
-| 일정표 공유 | 상단 "📷 복사" → 이미지로 복사/공유 (카톡·텔레그램 붙여넣기) |
-| 엑셀 | 상단 "📊 엑셀" → 내려받기 / 같은 양식으로 일괄 등록 |
+| 일정표 공유 | 상단 「이미지 복사」 → 이미지로 복사/공유 (카톡·텔레그램 붙여넣기) |
+| 엑셀 | 상단 「엑셀」 → 내려받기 / 같은 양식으로 일괄 등록 |
 | 날짜 이동 | ◀ ▶ 버튼 또는 날짜 클릭 |
 
 ## 클로드(Claude)와 함께 쓰기
